@@ -31,6 +31,7 @@ Once installed, skills are automatically available in Claude Code sessions via s
 | [blog-image-gen](#blog-image-gen) | Generate images from prompts for blogs, thumbnails, social media | - | Google Imagen 4 |
 | [blog-visual-gen](#blog-visual-gen) | Analyze blog content and generate contextual visuals | `/blog-visual-gen:generate`, `/blog-visual-gen:from-file` | Google Nano Banana 3 |
 | [infographic-gen](#infographic-gen) | Research a topic and generate professional infographics | `/infographic-gen:generate`, `/infographic-gen:from-content` | Google Nano Banana 3 |
+| [comic-strip-maker](#comic-strip-maker) | Generate comic strips and manga-style cartoon pages from story prompts | `/comic-strip-maker:create`, `/comic-strip-maker:panels`, `/comic-strip-maker:strip` | Google Nano Banana 3 |
 
 ### Video & Audio
 
@@ -181,6 +182,22 @@ OUTPUT/<YYYYMMDD>/<topic>/           # Final content outputs
 
 ---
 
+### comic-strip-maker
+
+Generate comic strips and manga-style cartoon pages from text prompts. Analyzes your story, generates optimized panel layouts, and renders the full page.
+
+**Layouts**: `strip` (horizontal, default), `manga` (varied panels), `4-koma` (vertical 4-panel), `splash` (large + insets), `grid` (even grid)
+
+**Styles**: `modern-anime`, `shonen`, `shoujo`, `chibi`, `seinen`, `retro`
+
+**Cost**: ~$0.04 per comic strip
+
+**Setup**: `pip install google-genai pillow`
+
+**Environment**: `GEMINI_API_KEY`
+
+---
+
 ### infographic-gen
 
 Three-phase infographic generation: research the topic, design the layout with AI, generate the final visual.
@@ -272,7 +289,7 @@ Extracts transcripts from YouTube videos with optional timestamps.
 
 | Variable | Required By | Get It From |
 |----------|-------------|-------------|
-| `GEMINI_API_KEY` | blog-image-gen, blog-visual-gen, infographic-gen, ai-film-maker | [Google AI Studio](https://aistudio.google.com/apikey) |
+| `GEMINI_API_KEY` | blog-image-gen, blog-visual-gen, infographic-gen, comic-strip-maker, ai-film-maker | [Google AI Studio](https://aistudio.google.com/apikey) |
 | `FAL_KEY` | ai-film-maker | [fal.ai](https://fal.ai) |
 | `REPLICATE_API_TOKEN` | ai-film-maker | [replicate.com](https://replicate.com) |
 | `TOGETHER_API_KEY` | ai-film-maker | [together.ai](https://together.ai) |
