@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700">
+  <defs>
+    <linearGradient id="headerGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#16213e;stop-opacity:1" />
+    </linearGradient>
+    <filter id="cardShadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+  
+  <!-- Browser window -->
+  <rect width="1200" height="700" fill="#f8f9fa" rx="10"/>
+  
+  <!-- Browser chrome -->
+  <rect x="0" y="0" width="1200" height="60" fill="#e9ecef" rx="10"/>
+  <rect x="0" y="0" width="1200" height="50" fill="#e9ecef" rx="10"/>
+  
+  <!-- Browser controls -->
+  <circle cx="30" cy="25" r="8" fill="#ff5f57"/>
+  <circle cx="55" cy="25" r="8" fill="#ffbd2e"/>
+  <circle cx="80" cy="25" r="8" fill="#28c840"/>
+  
+  <!-- Address bar -->
+  <rect x="150" y="12" width="700" height="28" rx="6" fill="white"/>
+  <text x="170" y="30" font-family="system-ui, sans-serif" font-size="13" fill="#636e72">augmi.world/skills</text>
+  <text x="750" y="30" font-family="system-ui, sans-serif" font-size="13" fill="#00d4ff">https://</text>
+  
+  <!-- Header -->
+  <rect x="0" y="50" width="1200" height="180" fill="url(#headerGradient)"/>
+  
+  <!-- Logo area -->
+  <text x="100" y="110" font-family="system-ui, sans-serif" font-size="32" font-weight="bold" fill="white">Augmi</text>
+  <text x="100" y="140" font-family="system-ui, sans-serif" font-size="16" fill="#a0a0a0">Skills Library</text>
+  
+  <!-- Navigation -->
+  <g transform="translate(800, 85)">
+    <text x="0" y="20" font-family="system-ui, sans-serif" font-size="14" fill="#a0a0a0">Home</text>
+    <text x="80" y="20" font-family="system-ui, sans-serif" font-size="14" fill="#a0a0a0">Pricing</text>
+    <text x="170" y="20" font-family="system-ui, sans-serif" font-size="14" fill="#a0a0a0">Agents</text>
+    <text x="260" y="20" font-family="system-ui, sans-serif" font-size="14" fill="white" font-weight="bold">Skills</text>
+  </g>
+  
+  <!-- Hero content -->
+  <text x="600" y="200" font-family="system-ui, sans-serif" font-size="42" font-weight="bold" fill="white" text-anchor="middle">Skills Library</text>
+  <text x="600" y="235" font-family="system-ui, sans-serif" font-size="18" fill="#a0a0a0" text-anchor="middle">Browse and discover 1,700+ community-built skills</text>
+  
+  <!-- Category tabs -->
+  <g transform="translate(100, 280)">
+    <rect x="0" y="0" width="120" height="40" rx="20" fill="#e94560"/>
+    <text x="60" y="26" font-family="system-ui, sans-serif" font-size="14" fill="white" text-anchor="middle">All Skills</text>
+    
+    <rect x="140" y="0" width="140" height="40" rx="20" fill="white" stroke="#dee2e6" stroke-width="1"/>
+    <text x="210" y="26" font-family="system-ui, sans-serif" font-size="14" fill="#636e72" text-anchor="middle">Content Creation</text>
+    
+    <rect x="300" y="0" width="140" height="40" rx="20" fill="white" stroke="#dee2e6" stroke-width="1"/>
+    <text x="370" y="26" font-family="system-ui, sans-serif" font-size="14" fill="#636e72" text-anchor="middle">Image & Video</text>
+    
+    <rect x="460" y="0" width="140" height="40" rx="20" fill="white" stroke="#dee2e6" stroke-width="1"/>
+    <text x="530" y="26" font-family="system-ui, sans-serif" font-size="14" fill="#636e72" text-anchor="middle">Developer Tools</text>
+  </g>
+  
+  <!-- Skill Cards Row 1 -->
+  <g transform="translate(100, 350)">
+    <!-- Card 1: deep-research -->
+    <g transform="translate(0, 0)">
+      <rect x="0" y="0" width="260" height="140" rx="12" fill="white" filter="url(#cardShadow)" stroke="#e94560" stroke-width="2"/>
+      <rect x="15" y="15" width="40" height="40" rx="8" fill="#1a1a2e"/>
+      <text x="35" y="42" font-family="system-ui, sans-serif" font-size="20" fill="#e94560" text-anchor="middle">🔍</text>
+      <text x="70" y="35" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="#2d3436">deep-research</text>
+      <text x="15" y="75" font-family="system-ui, sans-serif" font-size="13" fill="#636e72">Research-to-content pipeline:</text>
+      <text x="15" y="93" font-family="system-ui, sans-serif" font-size="13" fill="#636e72">web research, analysis, multi-</text>
+      <text x="15" y="111" font-family="system-ui, sans-serif" font-size="13" fill="#636e72">format output</text>
+      <rect x="15" y="120" width="70" height="18" rx="9" fill="#e94560" opacity="0.1"/>
+      <text x="50" y="133" font-family="system-ui, sans-serif" font-size="11" fill="#e94560" text-anchor="middle">Research</text>
+    </g>
+    
+    <!-- Card 2: blog-visual-gen -->
+    <g transform="translate(290, 0)">
+      <rect x="0" y="0" width="260" height="140" rx="12" fill="white" filter="url(#cardShadow)"/>
+      <rect x="15" y="15" width="40" height="40" rx="8" fill="#1a1a2e"/>
+      <text x="35" y="42" font-family="system-ui, sans-serif" font-size="20" fill="#00d4ff" text-anchor="middle">🎨</text>
+      <text x="70" y="35" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="#2d3436">blog-visual-gen</text>
+      <text x="15" y="75" font-family="system-ui, sans-serif" font-size="13" fill="#636e72">Analyze blog content and</text>
+      <text x="15" y="93" font-family="system-ui, sans-serif" font-size="13" fill="#636e72">generate contextual visuals</text>
+      <rect x="15" y="120" width="70" height="18" rx="9" fill="#00d4ff" opacity="0.1"/>
+      <text x="50" y="133" font-family="system-ui, sans-serif" font-size="11" fill="#00d4ff" text-anchor="middle">Images</text>
+    </g>
+    
+    <!-- Card 3: ai-film-maker -->
+    <g transform="translate(580, 0)">
+      <rect x="0" y="0" width="260" height="140" rx="12" fill="white" filter="url(#cardShadow)"/>
+      <rect x="15" y="15" width="40" height="40" rx="8" fill="#1a1a2e"/>
+      <text x="35" y="42" font-family="system-ui, sans-serif" font-size="20" fill="#6c5ce7" text-anchor="middle">🎬</text>
+      <text x="70" y="35" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="#2d3436">ai-film-maker</text>
+      <text x="15" y="75" font-family="system-ui, sans-serif" font-size="13" fill="#636e72">Create personalized 30-second</text>
+      <text x="15" y="93" font-family="system-ui, sans-serif" font-size="13" fill="#636e72">AI short films</text>
+      <rect x="15" y="120" width="70" height="18" rx="9" fill="#6c5ce7" opacity="0.1"/>
+      <text x="50" y="133" font-family="system-ui, sans-serif" font-size="11" fill="#6c5ce7" text-anchor="middle">Video</text>
+    </g>
+    
+    <!-- Card 4: codebase-tutor -->
+    <g transform="translate(870, 0)">
+      <rect x="0" y="0" width="230" height="140" rx="12" fill="white" filter="url(#cardShadow)"/>
+      <rect x="15" y="15" width="40" height="40" rx="8" fill="#1a1a2e"/>
+      <text x="35" y="42" font-family="system-ui, sans-serif" font-size="20" fill="#28c840" text-anchor="middle">🎓</text>
+      <text x="70" y="35" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="#2d3436">codebase-tutor</text>
+      <text x="15" y="75" font-family="system-ui, sans-serif" font-size="13" fill="#636e72">Voice-based codebase</text>
+      <text x="15" y="93" font-family="system-ui, sans-serif" font-size="13" fill="#636e72">learning and quiz sessions</text>
+      <rect x="15" y="120" width="80" height="18" rx="9" fill="#28c840" opacity="0.1"/>
+      <text x="55" y="133" font-family="system-ui, sans-serif" font-size="11" fill="#28c840" text-anchor="middle">Developer</text>
+    </g>
+  </g>
+  
+  <!-- Footer info -->
+  <text x="600" y="580" font-family="system-ui, sans-serif" font-size="14" fill="#a0a0a0" text-anchor="middle">OpenClaw Skills | Browse by category | Search functionality</text>
+</svg>
