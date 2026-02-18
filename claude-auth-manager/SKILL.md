@@ -125,28 +125,37 @@ LOCAL machine and sends the base64 string. The script writes it to the VPS.
 
 When the user asks to authenticate, login, or use Claude subscription:
 
-### RECOMMENDED: Direct Token Method (set-token)
+### RECOMMENDED: Direct Token Method (set-token) — No Restart Needed
 
-This is the most reliable method. The user extracts their OAuth token locally
-and sends it to the agent.
+This is the most reliable method. The user generates a token on their local
+machine and sends it to the agent. The agent applies it at runtime via the
+OpenClaw CLI — no restart required.
 
 #### Step 1: Ask user for their token
 Tell the user:
-"I need your Claude Code OAuth token. On your computer where Claude Code is
-installed and logged in, run one of these commands:
+"I need your Claude Code setup token. On your computer where Claude Code is
+installed and logged in, run:
 
-**Mac:**
+```
+claude setup-token
+```
+
+This will open a browser for authorization and give you a token.
+Send me the token (starts with `sk-ant-...`)."
+
+**Alternative extraction methods (if `claude setup-token` isn't available):**
+
+Mac:
 ```
 security find-generic-password -s 'Claude Code-credentials' -g 2>&1 | grep password
 ```
-Then from that JSON output, copy JUST the `accessToken` value (starts with `sk-ant-oat01-`).
+Then from that JSON output, copy the `accessToken` value.
 
-**Linux:**
+Linux:
 ```
-python3 -c "import json; print(json.loads(open('/root/.claude/.credentials.json').read())['claudeAiOauth']['accessToken'])"
+cat ~/.claude/.credentials.json
 ```
-
-Send me the token that starts with `sk-ant-oat01-...`"
+Then copy the `accessToken` value from the `claudeAiOauth` object.
 
 #### Step 2: Set the token
 When the user sends a token starting with `sk-ant-`:
@@ -154,13 +163,20 @@ When the user sends a token starting with `sk-ant-`:
 python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py set-token "<token>"
 ```
 This will:
-- Save the token persistently to `/data/`
-- Call the AUGMI API to set `CLAUDE_CODE_OAUTH_TOKEN` on the machine
-- Clear `ANTHROPIC_API_KEY` so the subscription takes over
-- Switch the model to `anthropic/claude-sonnet-4-20250514`
-- Machine restarts automatically with subscription auth
+1. Try `openclaw models auth paste-token` to apply auth at runtime (no restart)
+2. Set the model to `anthropic/claude-sonnet-4-20250514` via `openclaw config set`
+3. Fall back to direct config modification if CLI method fails
+4. Save persistence files so the config survives restarts
 
-Tell the user: "Subscription activated! The agent will restart momentarily."
+Parse the JSON output to check the `method` field:
+- `"openclaw_paste_token"` — applied live, tell user "Subscription activated!"
+- `"config_file"` — applied via config, tell user "Subscription configured!"
+- `null` — saved for restart only, tell user "Token saved, restart to activate."
+
+#### Step 3 (optional): Specify a different model
+```bash
+python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py set-token "<token>" "anthropic/claude-opus-4-5"
+```
 
 ### ALTERNATIVE: OAuth Flow (start/submit/activate)
 

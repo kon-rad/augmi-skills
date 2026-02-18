@@ -951,43 +951,37 @@ def cmd_activate(model=None):
 
 def cmd_set_token():
     """
-    Set OAuth token directly and activate subscription auth.
-    This is the most reliable method — user extracts the token on their
-    local machine and sends it to the agent.
+    Set OAuth token directly and activate subscription auth at runtime.
+    No restart needed — uses OpenClaw CLI to apply auth and model changes
+    immediately. Also writes persistence files so the config survives restarts.
 
-    Usage: python3 auth_manager.py set-token <oauth_token>
+    Usage: python3 auth_manager.py set-token <oauth_token> [model]
 
-    The token should start with 'sk-ant-oat01-' (access token from Claude).
+    The token should start with 'sk-ant-' (from `claude setup-token` or keychain).
     """
-    import urllib.request
-    import urllib.error
-
     if len(sys.argv) < 3:
         print(json.dumps({
             "status": "error",
             "message": (
-                "Missing token. Usage: set-token <oauth_token>\n\n"
+                "Missing token. Usage: set-token <oauth_token> [model]\n\n"
                 "To get your token, on your LOCAL machine run:\n"
-                "  Mac: security find-generic-password -s 'Claude Code-credentials' -g 2>&1 | "
-                "grep password | sed 's/.*password: \"\\(.*\\)\"/\\1/' | "
-                "python3 -c \"import sys,json; d=json.loads(sys.stdin.read().strip()); "
-                "print(d['claudeAiOauth']['accessToken'])\"\n"
-                "  Linux: python3 -c \"import json; "
-                "print(json.loads(open('/root/.claude/.credentials.json').read())"
-                "['claudeAiOauth']['accessToken'])\""
+                "  claude setup-token\n\n"
+                "Or extract manually:\n"
+                "  Mac: security find-generic-password -s "
+                "'Claude Code-credentials' -g 2>&1\n"
+                "  Linux: cat ~/.claude/.credentials.json"
             )
         }))
         return 1
 
     token = sys.argv[2].strip()
 
-    # Validate token format
     if not token.startswith("sk-ant-"):
         print(json.dumps({
             "status": "error",
             "message": (
-                f"Token doesn't look like a Claude OAuth token "
-                f"(should start with 'sk-ant-oat01-'). "
+                f"Token doesn't look like a Claude token "
+                f"(should start with 'sk-ant-'). "
                 f"Got: {token[:20]}..."
             )
         }))
@@ -995,8 +989,97 @@ def cmd_set_token():
 
     model = sys.argv[3] if len(sys.argv) > 3 else "anthropic/claude-sonnet-4-20250514"
     state_dir = os.environ.get("OPENCLAW_STATE_DIR", "/data")
+    config_file = os.path.join(state_dir, "openclaw.json")
+    applied_method = None
+    errors = []
 
-    # Save token persistently to /data/
+    # ── Method 1: OpenClaw CLI (paste-token) ──
+    # Try piping the token to the CLI. This is the official way and
+    # triggers auto-reload without restart.
+    if shutil.which("openclaw"):
+        # Try paste-token via stdin
+        try:
+            result = subprocess.run(
+                ["openclaw", "models", "auth", "paste-token",
+                 "--provider", "anthropic"],
+                input=token + "\n",
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode == 0:
+                applied_method = "openclaw_paste_token"
+            else:
+                errors.append(f"paste-token: {result.stderr[:200]}")
+        except Exception as e:
+            errors.append(f"paste-token: {str(e)[:200]}")
+
+        # Set model via CLI (works regardless of paste-token result)
+        try:
+            model_json = json.dumps({
+                "primary": model,
+                "fallbacks": ["anthropic/claude-sonnet-4"],
+            })
+            result = subprocess.run(
+                ["openclaw", "config", "set",
+                 "agents.defaults.model", "--json", model_json],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode != 0:
+                errors.append(f"config set model: {result.stderr[:200]}")
+        except Exception as e:
+            errors.append(f"config set model: {str(e)[:200]}")
+
+    # ── Method 2: Direct config modification (fallback) ──
+    # If the CLI didn't work, modify openclaw.json directly.
+    # OpenClaw auto-reloads on file changes (SIGUSR1).
+    if not applied_method and os.path.exists(config_file):
+        try:
+            with open(config_file) as f:
+                config = json.load(f)
+
+            # Add a custom provider with inline apiKey
+            if "models" not in config:
+                config["models"] = {}
+            if "providers" not in config["models"]:
+                config["models"]["providers"] = {}
+
+            config["models"]["providers"]["claude-subscription"] = {
+                "api": "anthropic-messages",
+                "apiKey": token,
+            }
+
+            # Update auth profile
+            if "auth" not in config:
+                config["auth"] = {}
+            if "profiles" not in config["auth"]:
+                config["auth"]["profiles"] = {}
+
+            config["auth"]["profiles"]["claude-subscription:default"] = {
+                "mode": "token",
+                "provider": "claude-subscription",
+            }
+
+            # Update model to use the custom provider
+            if "agents" not in config:
+                config["agents"] = {}
+            if "defaults" not in config["agents"]:
+                config["agents"]["defaults"] = {}
+
+            config["agents"]["defaults"]["model"] = {
+                "primary": f"claude-subscription/{model.split('/')[-1]}",
+                "fallbacks": [
+                    f"claude-subscription/claude-sonnet-4",
+                ],
+            }
+
+            with open(config_file, "w") as f:
+                json.dump(config, f, indent=2)
+
+            applied_method = "config_file"
+        except Exception as e:
+            errors.append(f"config file: {str(e)[:200]}")
+
+    # ── Persistence: write files for restart survival ──
+    # These files are read by start.sh on container boot.
     token_data = {
         "accessToken": token,
         "source": "set-token",
@@ -1009,113 +1092,52 @@ def cmd_set_token():
             json.dump(token_data, f)
         os.chmod(token_file, 0o600)
     except IOError:
-        pass  # Non-fatal
+        pass
 
-    # Create env override
     env_file = os.path.join(state_dir, ".env.subscription")
     try:
         with open(env_file, "w") as f:
             f.write(f'export CLAUDE_CODE_OAUTH_TOKEN="{token}"\n')
             f.write('export ANTHROPIC_API_KEY=""\n')
             f.write('export AUTH_MODE="subscription"\n')
+            f.write(f'export OPENCLAW_DEFAULT_MODEL="{model}"\n')
+            f.write('export OPENCLAW_DEFAULT_PROVIDER="anthropic"\n')
         os.chmod(env_file, 0o600)
     except IOError:
-        pass  # Non-fatal
+        pass
 
-    # Try AUGMI API to update machine env vars and restart
-    augmi_url = os.environ.get("AUGMI_API_URL", "")
-    project_id = os.environ.get("PROJECT_ID", "")
-    container_key = os.environ.get("CONTAINER_API_KEY", "")
-    machine_id = os.environ.get("FLY_MACHINE_ID", "")
-    api_method = None
-    api_error = None
-
-    # Attempt: AUGMI provider API
-    if augmi_url and project_id and container_key:
-        try:
-            payload = json.dumps({
-                "authMode": "subscription",
-                "oauthAccessToken": token,
-                "provider": "anthropic",
-                "model": model,
-            }).encode("utf-8")
-            req = urllib.request.Request(
-                f"{augmi_url}/api/agents/{project_id}/provider",
-                data=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {container_key}",
-                },
-                method="PUT",
-            )
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                if resp.status == 200:
-                    api_method = "augmi_api"
-                    resp_data = json.loads(resp.read().decode("utf-8"))
-        except Exception as e:
-            api_error = str(e)[:300]
-
-    # Fallback: Direct Fly.io Machines API
-    fly_token = os.environ.get("FLY_API_TOKEN", "")
-    if not api_method and fly_token and machine_id:
-        fly_app = os.environ.get("FLY_APP_NAME", "hexly-sandboxes")
-        try:
-            req = urllib.request.Request(
-                f"https://api.machines.dev/v1/apps/{fly_app}/machines/{machine_id}",
-                headers={"Authorization": f"Bearer {fly_token}"},
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                machine_data = json.loads(resp.read().decode("utf-8"))
-            config = machine_data.get("config", {})
-            env = config.get("env", {})
-            env["CLAUDE_CODE_OAUTH_TOKEN"] = token
-            env["ANTHROPIC_API_KEY"] = ""
-            env["OPENCLAW_DEFAULT_MODEL"] = model
-            env["OPENCLAW_DEFAULT_PROVIDER"] = "anthropic"
-            env["FORCE_CONFIG_RESET"] = "true"
-            config["env"] = env
-            payload = json.dumps({"config": config}).encode("utf-8")
-            req = urllib.request.Request(
-                f"https://api.machines.dev/v1/apps/{fly_app}/machines/{machine_id}",
-                data=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {fly_token}",
-                },
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                if resp.status in (200, 201):
-                    api_method = "fly_api"
-        except Exception as e:
-            api_error = (api_error or "") + f" | Fly: {str(e)[:200]}"
-
+    # ── Report result ──
     result = {
-        "status": "success" if api_method else "partial",
-        "token_set": True,
-        "token_saved": token_file,
+        "status": "success" if applied_method else "error",
+        "method": applied_method,
         "model": model,
-        "api_method": api_method,
+        "token_prefix": token[:20] + "...",
+        "persistence_files": [token_file, env_file],
     }
 
-    if api_method:
+    if applied_method == "openclaw_paste_token":
         result["message"] = (
-            f"Subscription auth activated via {api_method}! "
+            f"Subscription auth activated via OpenClaw CLI! "
             f"Model set to {model}. "
-            "The container will restart with subscription auth. "
-            "ANTHROPIC_API_KEY has been cleared."
+            "Changes are live — no restart needed."
+        )
+    elif applied_method == "config_file":
+        result["message"] = (
+            f"Subscription auth configured via direct config modification. "
+            f"Model set to claude-subscription/{model.split('/')[-1]}. "
+            "OpenClaw should auto-reload the config. "
+            "If it doesn't respond, a restart will pick up the changes."
         )
     else:
         result["message"] = (
-            "Token saved to persistent storage but could not update "
-            "machine env vars via API. The token is saved and will "
-            "be picked up on next restart."
+            "Could not apply auth at runtime. Token saved to "
+            "persistent storage — it will activate on next restart."
         )
-        if api_error:
-            result["api_error"] = api_error
+        if errors:
+            result["errors"] = errors
 
     print(json.dumps(result))
-    return 0
+    return 0 if applied_method else 1
 
 
 def cmd_transfer():
