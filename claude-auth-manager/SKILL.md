@@ -123,76 +123,99 @@ LOCAL machine and sends the base64 string. The script writes it to the VPS.
 
 ## Interaction Flow (for the AI agent)
 
-When the user asks to authenticate or login:
+When the user asks to authenticate, login, or use Claude subscription:
 
-### Step 1: Check current status
+### RECOMMENDED: Direct Token Method (set-token)
+
+This is the most reliable method. The user extracts their OAuth token locally
+and sends it to the agent.
+
+#### Step 1: Ask user for their token
+Tell the user:
+"I need your Claude Code OAuth token. On your computer where Claude Code is
+installed and logged in, run one of these commands:
+
+**Mac:**
+```
+security find-generic-password -s 'Claude Code-credentials' -g 2>&1 | grep password
+```
+Then from that JSON output, copy JUST the `accessToken` value (starts with `sk-ant-oat01-`).
+
+**Linux:**
+```
+python3 -c "import json; print(json.loads(open('/root/.claude/.credentials.json').read())['claudeAiOauth']['accessToken'])"
+```
+
+Send me the token that starts with `sk-ant-oat01-...`"
+
+#### Step 2: Set the token
+When the user sends a token starting with `sk-ant-`:
+```bash
+python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py set-token "<token>"
+```
+This will:
+- Save the token persistently to `/data/`
+- Call the AUGMI API to set `CLAUDE_CODE_OAUTH_TOKEN` on the machine
+- Clear `ANTHROPIC_API_KEY` so the subscription takes over
+- Switch the model to `anthropic/claude-sonnet-4-20250514`
+- Machine restarts automatically with subscription auth
+
+Tell the user: "Subscription activated! The agent will restart momentarily."
+
+### ALTERNATIVE: OAuth Flow (start/submit/activate)
+
+If the user prefers to authenticate directly through the browser (less reliable
+in container environments due to credential file detection issues):
+
+#### Step 1: Check current status
 ```bash
 python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py status
 ```
 If already authenticated, tell the user and stop.
 
-### Step 2: Start login
+#### Step 2: Start login
 ```bash
 python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py start
 ```
-Parse the JSON output. Send the `oauth_url` to the user with these instructions:
-1. "Click this link to open in your browser"
-2. "Sign in with your Anthropic account (the one with Max/Pro subscription)"
-3. "After authorizing, you'll see EITHER:"
-   - "A code on the page — copy and send it to me"
-   - "A redirect to localhost that fails — copy the FULL URL from the address bar and send it"
-4. "Send whatever you see — code, URL, anything. I can handle all formats."
+Parse the JSON output. Send the `oauth_url` to the user with instructions.
 
-### Step 3: Receive and submit the code/URL
-When the user sends back a string (code, URL, or anything), submit it AS-IS:
+#### Step 3: Submit the code
 ```bash
 python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py submit "<what_user_sent>"
 ```
-**Do NOT try to parse or extract just the code — pass the full user input.**
+**Pass the full user input AS-IS — do NOT extract just the code.**
 
-### Step 4: Verify
+#### Step 4: Verify
 ```bash
 python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py check
 ```
-Tell the user if authentication succeeded or failed.
 
-### Step 5: Activate subscription auth
-**After login is confirmed successful, ALWAYS run activate:**
+#### Step 5: Activate
 ```bash
 python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py activate
 ```
-This switches OpenClaw from API key to subscription auth. It:
-- Extracts the OAuth token from `~/.claude/.credentials.json`
-- Saves it to `/data/` for persistence across restarts
-- Clears `ANTHROPIC_API_KEY` so the subscription takes over
-- Tries to update machine env vars via AUGMI API
 
-Tell the user: "Subscription activated! The agent will restart to apply the change."
+**If activate fails with "credentials not found"**, fall back to the set-token method.
 
 ### If it fails
-1. Run `debug` to see what `claude login` is showing
-2. Run `cleanup` then `start` again to get a fresh URL
-3. The most common failures are:
-   - Code expired (user took too long — they need to be faster)
-   - Wrong format (old scripts extracted just the code; new one passes through)
-   - Menu wasn't selected (check debug output for menu still showing)
-4. Alternative: suggest the `transfer` method
+1. **Credentials not found after login**: Use the `set-token` method instead
+2. Run `debug-creds` to see what credential files exist on the filesystem
+3. Run `debug` to see what `claude login` is showing in tmux
+4. Run `cleanup` then try again, or use `set-token`
 
 ## Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
-| "No OAuth URL found" | Run `debug` to see tmux output. May need to manually select menu: `tmux attach -t claude-auth` |
-| "No login session found" | The process timed out. Run `start` again |
-| Code always fails | Make sure you're sending the FULL input (code or URL), not extracting just the code |
-| Menu not auto-selected | The menu format may have changed. Run `debug` and check the output. Try `tmux attach -t claude-auth` |
-| Auth works then expires | Re-run the full flow. Consider setting up a cron check |
+| "Credentials not found" after login | Use `set-token` method — the container can't reliably find the credentials file |
+| "No OAuth URL found" | Run `debug` to see tmux output |
+| Billing/credit error | The subscription may need credits. Check claude.ai/account |
+| Token expired | Re-run `set-token` with a fresh token from local machine |
 
 ## Notes
 
-- The tmux session is named `claude-auth` and is auto-cleaned after success
-- OAuth tokens expire periodically — users may need to re-authenticate
+- **`set-token` is the recommended method** — it bypasses all credential file issues
+- The AUGMI API (`PUT /api/agents/{id}/provider`) handles machine env var updates
+- OAuth tokens expire periodically — users may need to re-send their token
 - All output is JSON for easy parsing by the AI agent
 - The script has zero external dependencies (Python 3 standard library only)
-- Default login method is `subscription` (Pro/Max); use `start console` for API billing
-- The `sleep 120` at the end of the tmux command gives 2 minutes for the user to respond

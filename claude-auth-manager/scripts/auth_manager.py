@@ -949,6 +949,175 @@ def cmd_activate(model=None):
     return 0 if api_method else 0  # Still return success since token was saved
 
 
+def cmd_set_token():
+    """
+    Set OAuth token directly and activate subscription auth.
+    This is the most reliable method — user extracts the token on their
+    local machine and sends it to the agent.
+
+    Usage: python3 auth_manager.py set-token <oauth_token>
+
+    The token should start with 'sk-ant-oat01-' (access token from Claude).
+    """
+    import urllib.request
+    import urllib.error
+
+    if len(sys.argv) < 3:
+        print(json.dumps({
+            "status": "error",
+            "message": (
+                "Missing token. Usage: set-token <oauth_token>\n\n"
+                "To get your token, on your LOCAL machine run:\n"
+                "  Mac: security find-generic-password -s 'Claude Code-credentials' -g 2>&1 | "
+                "grep password | sed 's/.*password: \"\\(.*\\)\"/\\1/' | "
+                "python3 -c \"import sys,json; d=json.loads(sys.stdin.read().strip()); "
+                "print(d['claudeAiOauth']['accessToken'])\"\n"
+                "  Linux: python3 -c \"import json; "
+                "print(json.loads(open('/root/.claude/.credentials.json').read())"
+                "['claudeAiOauth']['accessToken'])\""
+            )
+        }))
+        return 1
+
+    token = sys.argv[2].strip()
+
+    # Validate token format
+    if not token.startswith("sk-ant-"):
+        print(json.dumps({
+            "status": "error",
+            "message": (
+                f"Token doesn't look like a Claude OAuth token "
+                f"(should start with 'sk-ant-oat01-'). "
+                f"Got: {token[:20]}..."
+            )
+        }))
+        return 1
+
+    model = sys.argv[3] if len(sys.argv) > 3 else "anthropic/claude-sonnet-4-20250514"
+    state_dir = os.environ.get("OPENCLAW_STATE_DIR", "/data")
+
+    # Save token persistently to /data/
+    token_data = {
+        "accessToken": token,
+        "source": "set-token",
+        "model": model,
+        "savedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    token_file = os.path.join(state_dir, ".claude-subscription-token")
+    try:
+        with open(token_file, "w") as f:
+            json.dump(token_data, f)
+        os.chmod(token_file, 0o600)
+    except IOError:
+        pass  # Non-fatal
+
+    # Create env override
+    env_file = os.path.join(state_dir, ".env.subscription")
+    try:
+        with open(env_file, "w") as f:
+            f.write(f'export CLAUDE_CODE_OAUTH_TOKEN="{token}"\n')
+            f.write('export ANTHROPIC_API_KEY=""\n')
+            f.write('export AUTH_MODE="subscription"\n')
+        os.chmod(env_file, 0o600)
+    except IOError:
+        pass  # Non-fatal
+
+    # Try AUGMI API to update machine env vars and restart
+    augmi_url = os.environ.get("AUGMI_API_URL", "")
+    project_id = os.environ.get("PROJECT_ID", "")
+    container_key = os.environ.get("CONTAINER_API_KEY", "")
+    machine_id = os.environ.get("FLY_MACHINE_ID", "")
+    api_method = None
+    api_error = None
+
+    # Attempt: AUGMI provider API
+    if augmi_url and project_id and container_key:
+        try:
+            payload = json.dumps({
+                "authMode": "subscription",
+                "oauthAccessToken": token,
+                "provider": "anthropic",
+                "model": model,
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                f"{augmi_url}/api/agents/{project_id}/provider",
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {container_key}",
+                },
+                method="PUT",
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                if resp.status == 200:
+                    api_method = "augmi_api"
+                    resp_data = json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            api_error = str(e)[:300]
+
+    # Fallback: Direct Fly.io Machines API
+    fly_token = os.environ.get("FLY_API_TOKEN", "")
+    if not api_method and fly_token and machine_id:
+        fly_app = os.environ.get("FLY_APP_NAME", "hexly-sandboxes")
+        try:
+            req = urllib.request.Request(
+                f"https://api.machines.dev/v1/apps/{fly_app}/machines/{machine_id}",
+                headers={"Authorization": f"Bearer {fly_token}"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                machine_data = json.loads(resp.read().decode("utf-8"))
+            config = machine_data.get("config", {})
+            env = config.get("env", {})
+            env["CLAUDE_CODE_OAUTH_TOKEN"] = token
+            env["ANTHROPIC_API_KEY"] = ""
+            env["OPENCLAW_DEFAULT_MODEL"] = model
+            env["OPENCLAW_DEFAULT_PROVIDER"] = "anthropic"
+            env["FORCE_CONFIG_RESET"] = "true"
+            config["env"] = env
+            payload = json.dumps({"config": config}).encode("utf-8")
+            req = urllib.request.Request(
+                f"https://api.machines.dev/v1/apps/{fly_app}/machines/{machine_id}",
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {fly_token}",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                if resp.status in (200, 201):
+                    api_method = "fly_api"
+        except Exception as e:
+            api_error = (api_error or "") + f" | Fly: {str(e)[:200]}"
+
+    result = {
+        "status": "success" if api_method else "partial",
+        "token_set": True,
+        "token_saved": token_file,
+        "model": model,
+        "api_method": api_method,
+    }
+
+    if api_method:
+        result["message"] = (
+            f"Subscription auth activated via {api_method}! "
+            f"Model set to {model}. "
+            "The container will restart with subscription auth. "
+            "ANTHROPIC_API_KEY has been cleared."
+        )
+    else:
+        result["message"] = (
+            "Token saved to persistent storage but could not update "
+            "machine env vars via API. The token is saved and will "
+            "be picked up on next restart."
+        )
+        if api_error:
+            result["api_error"] = api_error
+
+    print(json.dumps(result))
+    return 0
+
+
 def cmd_transfer():
     """
     Transfer auth credentials from base64-encoded auth.json.
@@ -1100,6 +1269,7 @@ COMMANDS = {
     "submit": (cmd_submit, "Submit auth code or callback URL"),
     "check": (cmd_check, "Check if login completed"),
     "activate": (cmd_activate, "Switch OpenClaw to use subscription auth"),
+    "set-token": (cmd_set_token, "Set OAuth token directly (most reliable)"),
     "cleanup": (cmd_cleanup, "Kill stale login sessions"),
     "transfer": (cmd_transfer, "Transfer auth.json via base64"),
     "debug": (cmd_debug, "Dump full tmux output for troubleshooting"),
