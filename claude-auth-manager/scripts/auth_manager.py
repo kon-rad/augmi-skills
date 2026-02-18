@@ -214,7 +214,21 @@ def cmd_status():
     # Try running a simple command to test auth
     stdout, stderr, code = run("claude -p 'hi' --output-format json 2>&1", timeout=30)
 
-    if code == 0 and "error" not in stdout.lower():
+    # Parse JSON output to check is_error field (more reliable than string matching)
+    is_authenticated = False
+    if code == 0 and stdout:
+        try:
+            parsed = json.loads(stdout)
+            # JSON output has {"is_error": false, "result": "..."} on success
+            if parsed.get("is_error") is False:
+                is_authenticated = True
+        except (json.JSONDecodeError, TypeError):
+            # Fallback: check for actual error keywords (not "is_error")
+            # Avoid matching "is_error":false which contains "error"
+            if "authentication_error" not in stdout.lower() and "unauthorized" not in stdout.lower():
+                is_authenticated = True
+
+    if is_authenticated:
         print(json.dumps({
             "status": "authenticated",
             "message": "Claude Code is authenticated and working."
@@ -974,7 +988,19 @@ def cmd_set_token():
         }))
         return 1
 
-    token = sys.argv[2].strip()
+    # Join all token args and strip whitespace/newlines — Telegram often
+    # breaks long tokens across multiple lines or messages
+    token_parts = sys.argv[2:]
+    # If a model arg is present (doesn't start with sk-ant-), separate it
+    model_arg = None
+    token_pieces = []
+    for part in token_parts:
+        stripped = part.strip()
+        if stripped.startswith("anthropic/") or stripped.startswith("openrouter/"):
+            model_arg = stripped
+        else:
+            token_pieces.append(stripped)
+    token = "".join(token_pieces).replace("\n", "").replace("\r", "").replace(" ", "")
 
     if not token.startswith("sk-ant-"):
         print(json.dumps({
@@ -987,7 +1013,7 @@ def cmd_set_token():
         }))
         return 1
 
-    model = sys.argv[3] if len(sys.argv) > 3 else "anthropic/claude-sonnet-4-20250514"
+    model = model_arg if model_arg else "anthropic/claude-sonnet-4-20250514"
     state_dir = os.environ.get("OPENCLAW_STATE_DIR", "/data")
     config_file = os.path.join(state_dir, "openclaw.json")
     applied_method = None

@@ -6,6 +6,9 @@ description: >
   using tmux, allowing users to complete authentication through chat.
   Use this skill when users say "login", "authenticate", "auth", "connect claude",
   or when Claude Code authentication has expired.
+  IMPORTANT: If the user provides a token starting with "sk-ant-", go DIRECTLY
+  to the set-token command. Do NOT run status first. Do NOT run start first.
+  Just run set-token immediately with the token they gave you.
 ---
 
 # Claude Code Auth Manager
@@ -123,7 +126,13 @@ LOCAL machine and sends the base64 string. The script writes it to the VPS.
 
 ## Interaction Flow (for the AI agent)
 
-When the user asks to authenticate, login, or use Claude subscription:
+**CRITICAL RULE: If the user's message contains a token starting with `sk-ant-`,
+go DIRECTLY to set-token. Do NOT run `status` first. Do NOT run `start` first.
+Just run `set-token` immediately.**
+
+**Note on multi-line tokens:** Telegram may break long tokens across multiple
+lines. The script handles this — pass ALL the token text as arguments and the
+script will join them and strip whitespace/newlines automatically.
 
 ### RECOMMENDED: Direct Token Method (set-token) — No Restart Needed
 
