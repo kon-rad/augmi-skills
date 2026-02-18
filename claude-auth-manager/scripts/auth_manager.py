@@ -456,26 +456,15 @@ def cmd_submit(user_input):
 
 
 def cmd_check():
-    """Check if the login completed."""
+    """Check if the login completed by verifying credentials file exists."""
     if tmux_session_exists():
         output = get_tmux_output()
         lower_output = output.lower()
 
-        success_keywords = [
-            "auth_done", "success", "set up", "logged in",
-            "authenticated", "welcome", "you are now"
-        ]
-        if any(kw in lower_output for kw in success_keywords):
-            run(f"tmux kill-session -t {TMUX_SESSION}")
-            print(json.dumps({
-                "status": "success",
-                "message": "Authentication completed! Claude Code is logged in."
-            }))
-            return 0
-
+        # Check for clear error indicators FIRST (before success)
         error_keywords = [
-            "invalid", "expired", "failed", "could not",
-            "try again", "authorization failed"
+            "invalid code", "expired", "authorization failed",
+            "try again", "could not exchange", "invalid_grant"
         ]
         if any(kw in lower_output for kw in error_keywords):
             print(json.dumps({
@@ -485,6 +474,45 @@ def cmd_check():
             }))
             return 1
 
+        success_keywords = [
+            "auth_done", "success", "set up", "logged in",
+            "authenticated", "welcome", "you are now"
+        ]
+        if any(kw in lower_output for kw in success_keywords):
+            # Verify credentials file actually exists before declaring success
+            token, _, cred_path = find_oauth_token()
+            if token:
+                run(f"tmux kill-session -t {TMUX_SESSION}")
+                print(json.dumps({
+                    "status": "success",
+                    "message": "Authentication completed! Credentials saved.",
+                    "credentials_path": cred_path,
+                }))
+                return 0
+            else:
+                # Keywords matched but no cred file yet — wait a bit
+                time.sleep(3)
+                token, _, cred_path = find_oauth_token()
+                if token:
+                    run(f"tmux kill-session -t {TMUX_SESSION}")
+                    print(json.dumps({
+                        "status": "success",
+                        "message": "Authentication completed! Credentials saved.",
+                        "credentials_path": cred_path,
+                    }))
+                    return 0
+                # Still no file — report the situation
+                print(json.dumps({
+                    "status": "warning",
+                    "message": (
+                        "Login output shows success keywords but credentials "
+                        "file not found. The token exchange may have failed. "
+                        "Run 'debug' to see full output."
+                    ),
+                    "tmux_output": output[-800:]
+                }))
+                return 1
+
         print(json.dumps({
             "status": "pending",
             "message": "Login still in progress...",
@@ -492,9 +520,30 @@ def cmd_check():
         }))
         return 0
 
-    # No tmux session - check if auth works
+    # No tmux session — check credentials file directly
+    token, _, cred_path = find_oauth_token()
+    if token:
+        print(json.dumps({
+            "status": "success",
+            "message": "Claude Code credentials found and valid!",
+            "credentials_path": cred_path,
+        }))
+        return 0
+
+    # Fall back to trying the CLI
     stdout, stderr, code = run("claude -p 'test' --output-format json 2>&1", timeout=20)
-    if code == 0 and "error" not in stdout.lower():
+    if code == 0:
+        # CLI works — might be billing error but still authenticated
+        if "billing" in stdout.lower() or "credit" in stdout.lower() or "balance" in stdout.lower():
+            print(json.dumps({
+                "status": "authenticated_but_billing_error",
+                "message": (
+                    "Claude Code IS authenticated but has a billing/credit issue. "
+                    "The subscription may still work — try running 'activate'."
+                ),
+                "cli_output": stdout[:500],
+            }))
+            return 0
         print(json.dumps({
             "status": "success",
             "message": "Claude Code is authenticated and working!"
@@ -712,20 +761,37 @@ def cmd_activate(model=None):
         stdout, stderr, code = run(
             "claude -p 'say ok' --output-format json 2>&1", timeout=30
         )
-        cli_works = code == 0 and "error" not in stdout.lower()
-        debug_info["claude_cli_works"] = cli_works
         debug_info["claude_cli_exit_code"] = code
         if stdout:
             debug_info["claude_cli_output"] = stdout[:500]
 
-        if cli_works:
+        # Distinguish: billing error (authenticated) vs auth error (not authenticated)
+        lower_out = stdout.lower()
+        is_billing_error = any(kw in lower_out for kw in [
+            "billing", "credit", "balance", "insufficient", "quota",
+            "rate limit", "payment", "exceeded"
+        ])
+        is_auth_error = any(kw in lower_out for kw in [
+            "not authenticated", "unauthorized", "invalid api key",
+            "authentication required", "not logged in"
+        ])
+        cli_works = code == 0 and not is_auth_error
+
+        debug_info["claude_cli_works"] = cli_works
+        debug_info["is_billing_error"] = is_billing_error
+
+        if cli_works or is_billing_error:
+            # CLI is authenticated (even if billing fails) — the cred file
+            # is just not where we expected. Offer transfer method.
             print(json.dumps({
                 "status": "error",
                 "message": (
-                    "Claude Code CLI is authenticated but could not find "
-                    "the credentials file to extract the OAuth token. "
-                    "Try the transfer method: on your LOCAL machine run "
-                    "'cat ~/.claude/.credentials.json | base64' and send the result."
+                    "Claude Code IS authenticated (CLI responds) but "
+                    "credentials file not found at any expected path. "
+                    "This happens when claude stores tokens in a non-standard "
+                    "location. Use the transfer method instead: on your LOCAL "
+                    "machine run 'cat ~/.claude/.credentials.json | base64' "
+                    "and send the base64 string."
                 ),
                 "debug": debug_info,
             }))
@@ -733,9 +799,9 @@ def cmd_activate(model=None):
             print(json.dumps({
                 "status": "error",
                 "message": (
-                    "Could not find OAuth credentials file after claude login. "
-                    "The login may have succeeded but credentials are stored "
-                    "in an unexpected location. Check debug info for found files."
+                    "Could not find OAuth credentials file and claude CLI "
+                    "is not authenticated. Run 'start' to begin the login "
+                    "flow, then 'activate' after login completes."
                 ),
                 "debug": debug_info,
             }))
@@ -940,6 +1006,90 @@ def cmd_transfer():
     return 0
 
 
+def cmd_debug_creds():
+    """
+    Diagnostic: show exactly where credentials exist on the filesystem.
+    Run this if activate can't find the credentials file.
+    """
+    home = os.path.expanduser("~")
+    result = {
+        "status": "debug",
+        "home": home,
+        "user": os.environ.get("USER", "unknown"),
+        "claude_config_dir": os.environ.get("CLAUDE_CONFIG_DIR", "(not set)"),
+        "known_paths": {},
+        "found_credential_files": [],
+        "claude_dir_contents": {},
+    }
+
+    # Check known paths
+    known = [
+        os.path.join(home, ".claude", ".credentials.json"),
+        os.path.join(home, ".claude", "credentials.json"),
+        os.path.join(home, ".config", "claude-code", "auth.json"),
+        os.path.join(home, ".config", "claude", "credentials.json"),
+        "/root/.claude/.credentials.json",
+        "/root/.claude/credentials.json",
+        "/data/.claude-subscription-token",
+    ]
+    for p in known:
+        if os.path.exists(p):
+            try:
+                size = os.path.getsize(p)
+                with open(p) as f:
+                    content = f.read(200)
+                result["known_paths"][p] = {"exists": True, "size": size, "preview": content}
+            except Exception as e:
+                result["known_paths"][p] = {"exists": True, "error": str(e)}
+        else:
+            result["known_paths"][p] = {"exists": False}
+
+    # List contents of ~/.claude/ and /root/.claude/
+    for claude_dir in [os.path.join(home, ".claude"), "/root/.claude"]:
+        if os.path.isdir(claude_dir):
+            try:
+                entries = os.listdir(claude_dir)
+                result["claude_dir_contents"][claude_dir] = entries
+            except PermissionError:
+                result["claude_dir_contents"][claude_dir] = "(permission denied)"
+
+    # Search for any credential-like files
+    for search_dir in [home, "/root", "/data"]:
+        if not os.path.isdir(search_dir):
+            continue
+        try:
+            for dirpath, dirnames, filenames in os.walk(search_dir):
+                depth = dirpath.replace(search_dir, "").count(os.sep)
+                if depth > 3:
+                    dirnames.clear()
+                    continue
+                skip = {"node_modules", ".npm", ".cache", "logs", "workspace"}
+                dirnames[:] = [d for d in dirnames if d not in skip]
+                for fname in filenames:
+                    if "credential" in fname.lower() or fname == "auth.json":
+                        full = os.path.join(dirpath, fname)
+                        try:
+                            size = os.path.getsize(full)
+                        except OSError:
+                            size = -1
+                        result["found_credential_files"].append({
+                            "path": full, "size": size
+                        })
+        except PermissionError:
+            continue
+
+    # Try find_oauth_token to see what it returns
+    token, refresh, cred_path = find_oauth_token()
+    result["find_oauth_token_result"] = {
+        "found": token is not None,
+        "path": cred_path,
+        "token_prefix": token[:20] + "..." if token else None,
+    }
+
+    print(json.dumps(result, indent=2))
+    return 0
+
+
 # ──────────────────────────────────────────────
 # Main
 # ──────────────────────────────────────────────
@@ -953,6 +1103,7 @@ COMMANDS = {
     "cleanup": (cmd_cleanup, "Kill stale login sessions"),
     "transfer": (cmd_transfer, "Transfer auth.json via base64"),
     "debug": (cmd_debug, "Dump full tmux output for troubleshooting"),
+    "debug-creds": (cmd_debug_creds, "Show credential file locations and contents"),
 }
 
 
