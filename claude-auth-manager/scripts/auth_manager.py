@@ -544,55 +544,117 @@ def cmd_debug():
     return 0
 
 
+def _try_extract_token(path):
+    """Try to extract OAuth token from a JSON file at the given path.
+    Returns (access_token, refresh_token, path) or (None, None, None).
+    """
+    if not os.path.exists(path):
+        return None, None, None
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return None, None, None
+
+    # Format 1: {"claudeAiOauth": {"accessToken": "...", "refreshToken": "..."}}
+    if "claudeAiOauth" in data and isinstance(data["claudeAiOauth"], dict):
+        oauth = data["claudeAiOauth"]
+        token = oauth.get("accessToken") or oauth.get("access_token")
+        refresh = oauth.get("refreshToken") or oauth.get("refresh_token")
+        if token:
+            return token, refresh, path
+
+    # Format 2: {"accessToken": "...", "refreshToken": "..."}
+    token = data.get("accessToken") or data.get("access_token")
+    if token:
+        refresh = data.get("refreshToken") or data.get("refresh_token")
+        return token, refresh, path
+
+    # Format 3: {"oauth_access_token": "...", ...}
+    token = data.get("oauth_access_token") or data.get("oauthAccessToken")
+    if token:
+        refresh = data.get("oauth_refresh_token") or data.get("oauthRefreshToken")
+        return token, refresh, path
+
+    # Format 4: nested under provider key like {"anthropic": {"accessToken": "..."}}
+    for key, val in data.items():
+        if isinstance(val, dict):
+            token = val.get("accessToken") or val.get("access_token")
+            if token:
+                refresh = val.get("refreshToken") or val.get("refresh_token")
+                return token, refresh, path
+
+    return None, None, None
+
+
 def find_oauth_token():
     """
     Find the OAuth access token from Claude Code's credentials file.
     Returns (access_token, refresh_token, cred_path) or (None, None, None).
     """
-    # Possible credential file locations
+    home = os.path.expanduser("~")
+
+    # Known credential file locations (in priority order)
     cred_paths = [
-        os.path.expanduser("~/.claude/.credentials.json"),
-        os.path.expanduser("~/.claude/credentials.json"),
-        os.path.expanduser("~/.config/claude-code/auth.json"),
-        os.path.expanduser("~/.config/claude/credentials.json"),
+        os.path.join(home, ".claude", ".credentials.json"),
+        os.path.join(home, ".claude", "credentials.json"),
+        os.path.join(home, ".config", "claude-code", "auth.json"),
+        os.path.join(home, ".config", "claude", "credentials.json"),
+        # Explicit /root paths (container often runs as root)
+        "/root/.claude/.credentials.json",
+        "/root/.claude/credentials.json",
+        "/root/.config/claude-code/auth.json",
+        # Data volume paths (might be persisted there)
+        "/data/.claude-subscription-token",
+        "/data/.claude/.credentials.json",
     ]
 
-    for path in cred_paths:
-        if not os.path.exists(path):
+    # De-duplicate while preserving order
+    seen = set()
+    unique_paths = []
+    for p in cred_paths:
+        rp = os.path.realpath(p)
+        if rp not in seen:
+            seen.add(rp)
+            unique_paths.append(p)
+
+    for path in unique_paths:
+        token, refresh, found_path = _try_extract_token(path)
+        if token:
+            return token, refresh, found_path
+
+    # Fallback: search filesystem for credential files
+    search_dirs = [home, "/root", "/data"]
+    search_names = [".credentials.json", "credentials.json", "auth.json"]
+
+    searched = set()
+    for search_dir in search_dirs:
+        if not os.path.isdir(search_dir):
             continue
+        real_dir = os.path.realpath(search_dir)
+        if real_dir in searched:
+            continue
+        searched.add(real_dir)
         try:
-            with open(path) as f:
-                data = json.load(f)
-        except (json.JSONDecodeError, IOError):
+            for dirpath, dirnames, filenames in os.walk(search_dir):
+                # Skip deep traversal to avoid slow searches
+                depth = dirpath.replace(search_dir, "").count(os.sep)
+                if depth > 4:
+                    dirnames.clear()
+                    continue
+                # Skip irrelevant directories
+                skip = {"node_modules", ".npm", ".cache", "logs", "workspace"}
+                dirnames[:] = [d for d in dirnames if d not in skip]
+                for fname in filenames:
+                    if fname in search_names:
+                        full = os.path.join(dirpath, fname)
+                        if os.path.realpath(full) not in seen:
+                            seen.add(os.path.realpath(full))
+                            token, refresh, found_path = _try_extract_token(full)
+                            if token:
+                                return token, refresh, found_path
+        except PermissionError:
             continue
-
-        # Format 1: {"claudeAiOauth": {"accessToken": "...", "refreshToken": "..."}}
-        if "claudeAiOauth" in data and isinstance(data["claudeAiOauth"], dict):
-            oauth = data["claudeAiOauth"]
-            token = oauth.get("accessToken") or oauth.get("access_token")
-            refresh = oauth.get("refreshToken") or oauth.get("refresh_token")
-            if token:
-                return token, refresh, path
-
-        # Format 2: {"accessToken": "...", "refreshToken": "..."}
-        token = data.get("accessToken") or data.get("access_token")
-        if token:
-            refresh = data.get("refreshToken") or data.get("refresh_token")
-            return token, refresh, path
-
-        # Format 3: {"oauth_access_token": "...", ...}
-        token = data.get("oauth_access_token") or data.get("oauthAccessToken")
-        if token:
-            refresh = data.get("oauth_refresh_token") or data.get("oauthRefreshToken")
-            return token, refresh, path
-
-        # Format 4: nested under provider key like {"anthropic": {"accessToken": "..."}}
-        for key, val in data.items():
-            if isinstance(val, dict):
-                token = val.get("accessToken") or val.get("access_token")
-                if token:
-                    refresh = val.get("refreshToken") or val.get("refresh_token")
-                    return token, refresh, path
 
     return None, None, None
 
@@ -621,28 +683,61 @@ def cmd_activate(model=None):
     access_token, refresh_token, cred_path = find_oauth_token()
 
     if not access_token:
-        # Try running claude to check if CLI is authenticated
+        # Debug: find what credential-like files exist
+        home = os.path.expanduser("~")
+        debug_info = {"home": home, "found_files": []}
+        for search_dir in [home, "/root", "/data"]:
+            if not os.path.isdir(search_dir):
+                continue
+            try:
+                for dirpath, dirnames, filenames in os.walk(search_dir):
+                    depth = dirpath.replace(search_dir, "").count(os.sep)
+                    if depth > 3:
+                        dirnames.clear()
+                        continue
+                    skip = {"node_modules", ".npm", ".cache", "logs", "workspace"}
+                    dirnames[:] = [d for d in dirnames if d not in skip]
+                    for fname in filenames:
+                        if "credential" in fname.lower() or "auth" in fname.lower() or "oauth" in fname.lower():
+                            full = os.path.join(dirpath, fname)
+                            try:
+                                size = os.path.getsize(full)
+                            except OSError:
+                                size = -1
+                            debug_info["found_files"].append({"path": full, "size": size})
+            except PermissionError:
+                continue
+
+        # Also check if claude CLI works at all
         stdout, stderr, code = run(
             "claude -p 'say ok' --output-format json 2>&1", timeout=30
         )
-        if code == 0 and "error" not in stdout.lower():
+        cli_works = code == 0 and "error" not in stdout.lower()
+        debug_info["claude_cli_works"] = cli_works
+        debug_info["claude_cli_exit_code"] = code
+        if stdout:
+            debug_info["claude_cli_output"] = stdout[:500]
+
+        if cli_works:
             print(json.dumps({
                 "status": "error",
                 "message": (
                     "Claude Code CLI is authenticated but could not find "
                     "the credentials file to extract the OAuth token. "
-                    "Checked: ~/.claude/.credentials.json, ~/.config/claude-code/auth.json. "
-                    "Try the transfer method instead: on your local machine run "
+                    "Try the transfer method: on your LOCAL machine run "
                     "'cat ~/.claude/.credentials.json | base64' and send the result."
-                )
+                ),
+                "debug": debug_info,
             }))
         else:
             print(json.dumps({
                 "status": "error",
                 "message": (
-                    "Not authenticated. Run 'start' first to authenticate with "
-                    "claude login, then run 'activate'."
-                )
+                    "Could not find OAuth credentials file after claude login. "
+                    "The login may have succeeded but credentials are stored "
+                    "in an unexpected location. Check debug info for found files."
+                ),
+                "debug": debug_info,
             }))
         return 1
 
