@@ -90,16 +90,23 @@ to understand what `claude login` is showing.
 
 ### Activate Subscription (after login succeeds)
 ```bash
+# Default: switches to anthropic/claude-sonnet-4-20250514
 python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py activate
+
+# Or specify a model:
+python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py activate anthropic/claude-sonnet-4
 ```
 **CRITICAL: Run this after `claude login` succeeds.** This command:
 1. Reads the OAuth token from `~/.claude/.credentials.json`
 2. Saves it to `/data/.claude-subscription-token` (persistent across restarts)
-3. Creates `/data/.env.subscription` (sourced by start.sh on boot)
-4. Tries to update the Fly.io machine env vars via AUGMI API
-5. Clears `ANTHROPIC_API_KEY` so OpenClaw uses the subscription
+3. Calls AUGMI API (`PUT /api/agents/{id}/provider`) to:
+   - Set `CLAUDE_CODE_OAUTH_TOKEN` on the machine
+   - Clear `ANTHROPIC_API_KEY` (it takes priority over subscription)
+   - Switch the model to a Claude model
+4. Falls back to Fly.io Machines API if AUGMI API fails
+5. Machine restarts automatically with subscription auth
 
-After activation, the container needs to restart for OpenClaw to pick up the change.
+This switches OpenClaw from API keys to the Claude Code subscription for ALL LLM calls.
 
 ### Cleanup Stale Sessions
 ```bash

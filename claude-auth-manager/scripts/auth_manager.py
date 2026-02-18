@@ -597,137 +597,195 @@ def find_oauth_token():
     return None, None, None
 
 
-def cmd_activate():
+def cmd_activate(model=None):
     """
-    After claude login succeeds, activate subscription auth for OpenClaw.
-    Extracts the OAuth token, saves it persistently, clears API keys,
-    and restarts the gateway so OpenClaw uses the subscription.
+    After claude login succeeds, switch OpenClaw to use the Claude Code
+    subscription for ALL LLM calls. This:
+    1. Extracts the OAuth token from claude login credentials
+    2. Saves it persistently to /data/ (survives restarts)
+    3. Calls the AUGMI API to update machine env vars:
+       - Sets CLAUDE_CODE_OAUTH_TOKEN
+       - Clears ANTHROPIC_API_KEY (it takes priority over subscription)
+       - Switches model to a Claude model
+    4. Falls back to direct Fly.io API if AUGMI API fails
+    5. The machine restarts with subscription auth active
     """
+    import urllib.request
+    import urllib.error
+
+    # Default to claude-sonnet-4 if no model specified
+    if not model:
+        model = "anthropic/claude-sonnet-4-20250514"
+
     # Step 1: Find the OAuth token from claude login credentials
     access_token, refresh_token, cred_path = find_oauth_token()
 
     if not access_token:
-        # Maybe claude login hasn't been done, or credentials are elsewhere
-        # Try running claude to check if it works
-        stdout, stderr, code = run("claude -p 'test' --output-format json 2>&1", timeout=20)
+        # Try running claude to check if CLI is authenticated
+        stdout, stderr, code = run(
+            "claude -p 'say ok' --output-format json 2>&1", timeout=30
+        )
         if code == 0 and "error" not in stdout.lower():
             print(json.dumps({
-                "status": "warning",
+                "status": "error",
                 "message": (
-                    "Claude Code CLI is authenticated, but could not find "
+                    "Claude Code CLI is authenticated but could not find "
                     "the credentials file to extract the OAuth token. "
                     "Checked: ~/.claude/.credentials.json, ~/.config/claude-code/auth.json. "
-                    "The subscription may still work if ANTHROPIC_API_KEY is cleared."
+                    "Try the transfer method instead: on your local machine run "
+                    "'cat ~/.claude/.credentials.json | base64' and send the result."
                 )
             }))
         else:
             print(json.dumps({
                 "status": "error",
                 "message": (
-                    "No OAuth token found. Run 'start' to authenticate with "
-                    "claude login first, then run 'activate'."
-                ),
-                "checked_paths": [
-                    "~/.claude/.credentials.json",
-                    "~/.claude/credentials.json",
-                    "~/.config/claude-code/auth.json",
-                ]
+                    "Not authenticated. Run 'start' first to authenticate with "
+                    "claude login, then run 'activate'."
+                )
             }))
-            return 1
+        return 1
 
     state_dir = os.environ.get("OPENCLAW_STATE_DIR", "/data")
 
-    # Step 2: Save token persistently to /data/ volume (survives restarts)
-    if access_token:
-        token_data = {
-            "accessToken": access_token,
-            "source": cred_path,
-            "savedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        }
-        if refresh_token:
-            token_data["refreshToken"] = refresh_token
+    # Step 2: Save token persistently to /data/ volume
+    token_data = {
+        "accessToken": access_token,
+        "source": cred_path,
+        "model": model,
+        "savedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    if refresh_token:
+        token_data["refreshToken"] = refresh_token
 
-        token_file = os.path.join(state_dir, ".claude-subscription-token")
-        try:
-            with open(token_file, "w") as f:
-                json.dump(token_data, f)
-            os.chmod(token_file, 0o600)
-        except IOError as e:
-            print(json.dumps({
-                "status": "error",
-                "message": f"Failed to save token to {token_file}: {e}"
-            }))
-            return 1
+    token_file = os.path.join(state_dir, ".claude-subscription-token")
+    try:
+        with open(token_file, "w") as f:
+            json.dump(token_data, f)
+        os.chmod(token_file, 0o600)
+    except IOError as e:
+        print(json.dumps({
+            "status": "error",
+            "message": f"Failed to save token to {token_file}: {e}"
+        }))
+        return 1
 
-    # Step 3: Create env override script (sourced by start.sh on boot)
+    # Step 3: Create env override script
     env_file = os.path.join(state_dir, ".env.subscription")
     try:
         with open(env_file, "w") as f:
-            if access_token:
-                f.write(f'export CLAUDE_CODE_OAUTH_TOKEN="{access_token}"\n')
+            f.write(f'export CLAUDE_CODE_OAUTH_TOKEN="{access_token}"\n')
             f.write('export ANTHROPIC_API_KEY=""\n')
             f.write('export AUTH_MODE="subscription"\n')
         os.chmod(env_file, 0o600)
     except IOError as e:
-        print(json.dumps({
-            "status": "error",
-            "message": f"Failed to write env override: {e}"
-        }))
-        return 1
+        pass  # Non-fatal
 
-    # Step 4: Try to call AUGMI API to update machine env vars for persistence
+    # Step 4: Try AUGMI API to update machine env vars and restart
     augmi_url = os.environ.get("AUGMI_API_URL", "")
     project_id = os.environ.get("PROJECT_ID", "")
-    api_key = os.environ.get("CONTAINER_API_KEY", "")
-    api_updated = False
+    container_key = os.environ.get("CONTAINER_API_KEY", "")
+    machine_id = os.environ.get("FLY_MACHINE_ID", "")
+    api_method = None
+    api_error = None
 
-    if augmi_url and project_id and api_key and access_token:
-        import urllib.request
-        import urllib.error
+    # Attempt 4a: AUGMI provider API
+    if augmi_url and project_id and container_key:
         try:
             payload = json.dumps({
                 "authMode": "subscription",
                 "oauthAccessToken": access_token,
                 "provider": "anthropic",
+                "model": model,
             }).encode("utf-8")
             req = urllib.request.Request(
                 f"{augmi_url}/api/agents/{project_id}/provider",
                 data=payload,
                 headers={
                     "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}",
+                    "Authorization": f"Bearer {container_key}",
                 },
                 method="PUT",
             )
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with urllib.request.urlopen(req, timeout=20) as resp:
                 if resp.status == 200:
-                    api_updated = True
-        except Exception:
-            pass  # Non-fatal, we still have the file-based fallback
+                    api_method = "augmi_api"
+        except Exception as e:
+            api_error = str(e)[:200]
+
+    # Attempt 4b: Direct Fly.io Machines API (if AUGMI API failed)
+    fly_token = os.environ.get("FLY_API_TOKEN", "")
+    if not api_method and fly_token and machine_id:
+        fly_app = os.environ.get("FLY_APP_NAME", "hexly-sandboxes")
+        try:
+            # First get current machine config
+            req = urllib.request.Request(
+                f"https://api.machines.dev/v1/apps/{fly_app}/machines/{machine_id}",
+                headers={
+                    "Authorization": f"Bearer {fly_token}",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                machine_data = json.loads(resp.read().decode("utf-8"))
+
+            # Update env vars in the machine config
+            config = machine_data.get("config", {})
+            env = config.get("env", {})
+            env["CLAUDE_CODE_OAUTH_TOKEN"] = access_token
+            env["ANTHROPIC_API_KEY"] = ""
+            config["env"] = env
+
+            # Update the machine
+            payload = json.dumps({"config": config}).encode("utf-8")
+            req = urllib.request.Request(
+                f"https://api.machines.dev/v1/apps/{fly_app}/machines/{machine_id}",
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {fly_token}",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                if resp.status in (200, 201):
+                    api_method = "fly_api"
+        except Exception as e:
+            api_error = (api_error or "") + f" | Fly: {str(e)[:200]}"
 
     # Step 5: Report results
     result = {
-        "status": "success",
-        "message": "Subscription auth activated!",
-        "token_saved": os.path.join(state_dir, ".claude-subscription-token"),
-        "env_override": env_file,
-        "api_updated": api_updated,
+        "status": "success" if api_method else "partial",
+        "token_found": True,
+        "token_source": cred_path,
+        "token_saved": token_file,
+        "model": model,
+        "api_method": api_method,
     }
 
-    if api_updated:
-        result["next_step"] = (
-            "Machine env vars updated. The container will restart automatically "
-            "with subscription auth. ANTHROPIC_API_KEY has been cleared."
+    if api_method:
+        result["message"] = (
+            f"Subscription auth activated via {api_method}! "
+            f"Model set to {model}. "
+            "The container will restart with subscription auth. "
+            "ANTHROPIC_API_KEY has been cleared."
         )
     else:
-        result["next_step"] = (
-            "Token saved to persistent storage. To fully activate, restart the "
-            "agent from the AUGMI dashboard or run: "
-            "flyctl machines restart <machine_id> -a hexly-sandboxes"
+        result["message"] = (
+            "OAuth token extracted and saved to persistent storage, but "
+            "could not update machine env vars automatically. "
+            "The token is saved and will work on next restart if start.sh "
+            "checks for it. To restart now, use the AUGMI dashboard."
         )
+        if api_error:
+            result["api_error"] = api_error
+        result["manual_steps"] = [
+            "Option 1: Restart from AUGMI dashboard",
+            "Option 2: flyctl machines restart " + (machine_id or "<machine_id>") + " -a hexly-sandboxes",
+            "Option 3: Ask the admin to set CLAUDE_CODE_OAUTH_TOKEN on the machine",
+        ]
 
     print(json.dumps(result))
-    return 0
+    return 0 if api_method else 0  # Still return success since token was saved
 
 
 def cmd_transfer():
@@ -841,6 +899,10 @@ def main():
     if cmd_name == "start":
         method = sys.argv[2] if len(sys.argv) > 2 else "subscription"
         return cmd_func(method)
+
+    if cmd_name == "activate":
+        model = sys.argv[2] if len(sys.argv) > 2 else None
+        return cmd_func(model)
 
     return cmd_func()
 
