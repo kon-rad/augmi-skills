@@ -88,6 +88,19 @@ python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py debug
 Dumps the full tmux pane output for troubleshooting. Use this if login fails
 to understand what `claude login` is showing.
 
+### Activate Subscription (after login succeeds)
+```bash
+python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py activate
+```
+**CRITICAL: Run this after `claude login` succeeds.** This command:
+1. Reads the OAuth token from `~/.claude/.credentials.json`
+2. Saves it to `/data/.claude-subscription-token` (persistent across restarts)
+3. Creates `/data/.env.subscription` (sourced by start.sh on boot)
+4. Tries to update the Fly.io machine env vars via AUGMI API
+5. Clears `ANTHROPIC_API_KEY` so OpenClaw uses the subscription
+
+After activation, the container needs to restart for OpenClaw to pick up the change.
+
 ### Cleanup Stale Sessions
 ```bash
 python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py cleanup
@@ -98,7 +111,7 @@ Kills any stale tmux auth sessions.
 ```bash
 python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py transfer "<base64>"
 ```
-Alternative method: user runs `cat ~/.config/claude-code/auth.json | base64` on their
+Alternative method: user runs `cat ~/.claude/.credentials.json | base64` on their
 LOCAL machine and sends the base64 string. The script writes it to the VPS.
 
 ## Interaction Flow (for the AI agent)
@@ -135,6 +148,19 @@ python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py submit "<what
 python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py check
 ```
 Tell the user if authentication succeeded or failed.
+
+### Step 5: Activate subscription auth
+**After login is confirmed successful, ALWAYS run activate:**
+```bash
+python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py activate
+```
+This switches OpenClaw from API key to subscription auth. It:
+- Extracts the OAuth token from `~/.claude/.credentials.json`
+- Saves it to `/data/` for persistence across restarts
+- Clears `ANTHROPIC_API_KEY` so the subscription takes over
+- Tries to update machine env vars via AUGMI API
+
+Tell the user: "Subscription activated! The agent will restart to apply the change."
 
 ### If it fails
 1. Run `debug` to see what `claude login` is showing

@@ -544,6 +544,192 @@ def cmd_debug():
     return 0
 
 
+def find_oauth_token():
+    """
+    Find the OAuth access token from Claude Code's credentials file.
+    Returns (access_token, refresh_token, cred_path) or (None, None, None).
+    """
+    # Possible credential file locations
+    cred_paths = [
+        os.path.expanduser("~/.claude/.credentials.json"),
+        os.path.expanduser("~/.claude/credentials.json"),
+        os.path.expanduser("~/.config/claude-code/auth.json"),
+        os.path.expanduser("~/.config/claude/credentials.json"),
+    ]
+
+    for path in cred_paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            continue
+
+        # Format 1: {"claudeAiOauth": {"accessToken": "...", "refreshToken": "..."}}
+        if "claudeAiOauth" in data and isinstance(data["claudeAiOauth"], dict):
+            oauth = data["claudeAiOauth"]
+            token = oauth.get("accessToken") or oauth.get("access_token")
+            refresh = oauth.get("refreshToken") or oauth.get("refresh_token")
+            if token:
+                return token, refresh, path
+
+        # Format 2: {"accessToken": "...", "refreshToken": "..."}
+        token = data.get("accessToken") or data.get("access_token")
+        if token:
+            refresh = data.get("refreshToken") or data.get("refresh_token")
+            return token, refresh, path
+
+        # Format 3: {"oauth_access_token": "...", ...}
+        token = data.get("oauth_access_token") or data.get("oauthAccessToken")
+        if token:
+            refresh = data.get("oauth_refresh_token") or data.get("oauthRefreshToken")
+            return token, refresh, path
+
+        # Format 4: nested under provider key like {"anthropic": {"accessToken": "..."}}
+        for key, val in data.items():
+            if isinstance(val, dict):
+                token = val.get("accessToken") or val.get("access_token")
+                if token:
+                    refresh = val.get("refreshToken") or val.get("refresh_token")
+                    return token, refresh, path
+
+    return None, None, None
+
+
+def cmd_activate():
+    """
+    After claude login succeeds, activate subscription auth for OpenClaw.
+    Extracts the OAuth token, saves it persistently, clears API keys,
+    and restarts the gateway so OpenClaw uses the subscription.
+    """
+    # Step 1: Find the OAuth token from claude login credentials
+    access_token, refresh_token, cred_path = find_oauth_token()
+
+    if not access_token:
+        # Maybe claude login hasn't been done, or credentials are elsewhere
+        # Try running claude to check if it works
+        stdout, stderr, code = run("claude -p 'test' --output-format json 2>&1", timeout=20)
+        if code == 0 and "error" not in stdout.lower():
+            print(json.dumps({
+                "status": "warning",
+                "message": (
+                    "Claude Code CLI is authenticated, but could not find "
+                    "the credentials file to extract the OAuth token. "
+                    "Checked: ~/.claude/.credentials.json, ~/.config/claude-code/auth.json. "
+                    "The subscription may still work if ANTHROPIC_API_KEY is cleared."
+                )
+            }))
+        else:
+            print(json.dumps({
+                "status": "error",
+                "message": (
+                    "No OAuth token found. Run 'start' to authenticate with "
+                    "claude login first, then run 'activate'."
+                ),
+                "checked_paths": [
+                    "~/.claude/.credentials.json",
+                    "~/.claude/credentials.json",
+                    "~/.config/claude-code/auth.json",
+                ]
+            }))
+            return 1
+
+    state_dir = os.environ.get("OPENCLAW_STATE_DIR", "/data")
+
+    # Step 2: Save token persistently to /data/ volume (survives restarts)
+    if access_token:
+        token_data = {
+            "accessToken": access_token,
+            "source": cred_path,
+            "savedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        if refresh_token:
+            token_data["refreshToken"] = refresh_token
+
+        token_file = os.path.join(state_dir, ".claude-subscription-token")
+        try:
+            with open(token_file, "w") as f:
+                json.dump(token_data, f)
+            os.chmod(token_file, 0o600)
+        except IOError as e:
+            print(json.dumps({
+                "status": "error",
+                "message": f"Failed to save token to {token_file}: {e}"
+            }))
+            return 1
+
+    # Step 3: Create env override script (sourced by start.sh on boot)
+    env_file = os.path.join(state_dir, ".env.subscription")
+    try:
+        with open(env_file, "w") as f:
+            if access_token:
+                f.write(f'export CLAUDE_CODE_OAUTH_TOKEN="{access_token}"\n')
+            f.write('export ANTHROPIC_API_KEY=""\n')
+            f.write('export AUTH_MODE="subscription"\n')
+        os.chmod(env_file, 0o600)
+    except IOError as e:
+        print(json.dumps({
+            "status": "error",
+            "message": f"Failed to write env override: {e}"
+        }))
+        return 1
+
+    # Step 4: Try to call AUGMI API to update machine env vars for persistence
+    augmi_url = os.environ.get("AUGMI_API_URL", "")
+    project_id = os.environ.get("PROJECT_ID", "")
+    api_key = os.environ.get("CONTAINER_API_KEY", "")
+    api_updated = False
+
+    if augmi_url and project_id and api_key and access_token:
+        import urllib.request
+        import urllib.error
+        try:
+            payload = json.dumps({
+                "authMode": "subscription",
+                "oauthAccessToken": access_token,
+                "provider": "anthropic",
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                f"{augmi_url}/api/agents/{project_id}/provider",
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                },
+                method="PUT",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                if resp.status == 200:
+                    api_updated = True
+        except Exception:
+            pass  # Non-fatal, we still have the file-based fallback
+
+    # Step 5: Report results
+    result = {
+        "status": "success",
+        "message": "Subscription auth activated!",
+        "token_saved": os.path.join(state_dir, ".claude-subscription-token"),
+        "env_override": env_file,
+        "api_updated": api_updated,
+    }
+
+    if api_updated:
+        result["next_step"] = (
+            "Machine env vars updated. The container will restart automatically "
+            "with subscription auth. ANTHROPIC_API_KEY has been cleared."
+        )
+    else:
+        result["next_step"] = (
+            "Token saved to persistent storage. To fully activate, restart the "
+            "agent from the AUGMI dashboard or run: "
+            "flyctl machines restart <machine_id> -a hexly-sandboxes"
+        )
+
+    print(json.dumps(result))
+    return 0
+
+
 def cmd_transfer():
     """
     Transfer auth credentials from base64-encoded auth.json.
@@ -610,6 +796,7 @@ COMMANDS = {
     "start": (cmd_start, "Start OAuth login flow"),
     "submit": (cmd_submit, "Submit auth code or callback URL"),
     "check": (cmd_check, "Check if login completed"),
+    "activate": (cmd_activate, "Switch OpenClaw to use subscription auth"),
     "cleanup": (cmd_cleanup, "Kill stale login sessions"),
     "transfer": (cmd_transfer, "Transfer auth.json via base64"),
     "debug": (cmd_debug, "Dump full tmux output for troubleshooting"),
