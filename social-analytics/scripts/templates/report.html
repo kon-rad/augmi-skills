@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Media Analytics Report</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #1a1a1a;
+            background: #fff;
+            padding: 40px;
+            font-size: 14px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #1B5E20;
+        }
+        .header h1 {
+            font-size: 28px;
+            color: #1B5E20;
+            margin-bottom: 8px;
+        }
+        .header .date {
+            font-size: 16px;
+            color: #666;
+        }
+        .header .brand {
+            font-size: 12px;
+            color: #D4A017;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 4px;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+        .kpi-card {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .kpi-card .platform {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+        .kpi-card .value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1B5E20;
+        }
+        .kpi-card .change {
+            font-size: 14px;
+            margin-top: 4px;
+        }
+        .kpi-card .change.positive { color: #2e7d32; }
+        .kpi-card .change.negative { color: #c62828; }
+        .kpi-card .change.neutral { color: #666; }
+        .kpi-card.total {
+            background: #1B5E20;
+            border-color: #1B5E20;
+        }
+        .kpi-card.total .platform,
+        .kpi-card.total .value,
+        .kpi-card.total .change { color: #fff; }
+
+        .chart-container {
+            margin-bottom: 40px;
+            page-break-inside: avoid;
+        }
+        .chart-container h2 {
+            font-size: 18px;
+            color: #1B5E20;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .chart-wrapper {
+            position: relative;
+            height: 350px;
+            width: 100%;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 40px;
+            page-break-inside: avoid;
+        }
+        th, td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #1B5E20;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        td { font-size: 13px; }
+        tr:hover { background: #f8f9fa; }
+
+        .section-title {
+            font-size: 18px;
+            color: #1B5E20;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            font-size: 11px;
+            color: #999;
+        }
+
+        @media print {
+            body { padding: 20px; }
+            .chart-container { page-break-inside: avoid; }
+            .kpi-grid { page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="brand">Augmi Analytics</div>
+    <h1>Social Media Report</h1>
+    <div class="date" id="report-date"></div>
+</div>
+
+<!-- KPI Cards -->
+<div class="kpi-grid" id="kpi-grid"></div>
+
+<!-- Follower Growth Chart -->
+<div class="chart-container">
+    <h2>Follower Growth (Last 30 Days)</h2>
+    <div class="chart-wrapper">
+        <canvas id="followerChart"></canvas>
+    </div>
+</div>
+
+<!-- Engagement Comparison Chart -->
+<div class="chart-container">
+    <h2>Engagement by Platform</h2>
+    <div class="chart-wrapper">
+        <canvas id="engagementChart"></canvas>
+    </div>
+</div>
+
+<!-- Detailed Metrics Table -->
+<h2 class="section-title">Detailed Metrics</h2>
+<table id="metrics-table">
+    <thead>
+        <tr>
+            <th>Platform</th>
+            <th>Followers</th>
+            <th>Impressions</th>
+            <th>Likes</th>
+            <th>Comments</th>
+            <th>Shares</th>
+            <th>Engagement Rate</th>
+        </tr>
+    </thead>
+    <tbody id="metrics-tbody"></tbody>
+</table>
+
+<div class="footer">
+    <p>Generated by Augmi Social Analytics | Data source: Postiz Analytics API</p>
+</div>
+
+<script>
+    // Data injection point - replaced by generate_pdf.js
+    const REPORT_DATA = '__REPORT_DATA__';
+
+    const platformColors = {
+        instagram: '#E1306C',
+        twitter: '#1DA1F2',
+        linkedin: '#0077B5',
+        'linkedin-page': '#0A66C2',
+        youtube: '#FF0000',
+        facebook: '#1877F2'
+    };
+
+    function init() {
+        let data;
+        try {
+            data = typeof REPORT_DATA === 'string' ? JSON.parse(REPORT_DATA) : REPORT_DATA;
+        } catch (e) {
+            document.body.innerHTML = '<p>No data available. Run collection first.</p>';
+            return;
+        }
+
+        document.getElementById('report-date').textContent = data.date || 'N/A';
+
+        renderKPICards(data);
+        renderFollowerChart(data);
+        renderEngagementChart(data);
+        renderMetricsTable(data);
+    }
+
+    function renderKPICards(data) {
+        const grid = document.getElementById('kpi-grid');
+        const followers = data.followers || {};
+        const platforms = followers.platforms || {};
+
+        for (const [key, platform] of Object.entries(platforms)) {
+            const history = platform.history || [];
+            if (!history.length) continue;
+
+            const latest = history[history.length - 1];
+            const value = latest.value || 0;
+            const change = latest.change || 0;
+            const changeClass = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
+            const sign = change > 0 ? '+' : '';
+
+            grid.innerHTML += `
+                <div class="kpi-card">
+                    <div class="platform">${key}</div>
+                    <div class="value">${value.toLocaleString()}</div>
+                    <div class="change ${changeClass}">${sign}${change.toLocaleString()} today</div>
+                </div>
+            `;
+        }
+
+        // Total card
+        const totalHistory = (followers.total || {}).history || [];
+        if (totalHistory.length) {
+            const latest = totalHistory[totalHistory.length - 1];
+            const total = latest.total || 0;
+            const change = latest.change || 0;
+            const sign = change > 0 ? '+' : '';
+            grid.innerHTML += `
+                <div class="kpi-card total">
+                    <div class="platform">Total</div>
+                    <div class="value">${total.toLocaleString()}</div>
+                    <div class="change">${sign}${change.toLocaleString()} today</div>
+                </div>
+            `;
+        }
+    }
+
+    function renderFollowerChart(data) {
+        const ctx = document.getElementById('followerChart').getContext('2d');
+        const followers = data.followers || {};
+        const platforms = followers.platforms || {};
+
+        const datasets = [];
+        for (const [key, platform] of Object.entries(platforms)) {
+            const history = platform.history || [];
+            if (!history.length) continue;
+
+            // Take last 30 entries
+            const recent = history.slice(-30);
+            datasets.push({
+                label: key.charAt(0).toUpperCase() + key.slice(1),
+                data: recent.map(h => ({ x: h.date, y: h.value })),
+                borderColor: platformColors[key] || '#666',
+                backgroundColor: (platformColors[key] || '#666') + '20',
+                fill: false,
+                tension: 0.3,
+                pointRadius: 2
+            });
+        }
+
+        new Chart(ctx, {
+            type: 'line',
+            data: { datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { type: 'category', title: { display: true, text: 'Date' } },
+                    y: { title: { display: true, text: 'Followers' }, beginAtZero: false }
+                },
+                plugins: {
+                    legend: { position: 'top' }
+                }
+            }
+        });
+    }
+
+    function renderEngagementChart(data) {
+        const ctx = document.getElementById('engagementChart').getContext('2d');
+        const allMetrics = data.allMetrics || {};
+        const platforms = allMetrics.platforms || {};
+
+        const labels = [];
+        const likesData = [];
+        const commentsData = [];
+        const sharesData = [];
+
+        for (const [key, platform] of Object.entries(platforms)) {
+            const history = platform.history || [];
+            if (!history.length) continue;
+
+            const latest = history[history.length - 1];
+            const metrics = latest.metrics || {};
+
+            labels.push(key.charAt(0).toUpperCase() + key.slice(1));
+            likesData.push((metrics.likes || {}).value || 0);
+            commentsData.push((metrics.comments || {}).value || 0);
+            sharesData.push((metrics.shares || {}).value || 0);
+        }
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    { label: 'Likes', data: likesData, backgroundColor: '#D4A017' },
+                    { label: 'Comments', data: commentsData, backgroundColor: '#1B5E20' },
+                    { label: 'Shares', data: sharesData, backgroundColor: '#2E7D32' }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, title: { display: true, text: 'Count' } }
+                },
+                plugins: {
+                    legend: { position: 'top' }
+                }
+            }
+        });
+    }
+
+    function renderMetricsTable(data) {
+        const tbody = document.getElementById('metrics-tbody');
+        const followers = (data.followers || {}).platforms || {};
+        const allMetrics = (data.allMetrics || {}).platforms || {};
+
+        const platformKeys = new Set([...Object.keys(followers), ...Object.keys(allMetrics)]);
+
+        for (const key of platformKeys) {
+            const fHistory = (followers[key] || {}).history || [];
+            const mHistory = (allMetrics[key] || {}).history || [];
+
+            const fLatest = fHistory.length ? fHistory[fHistory.length - 1] : {};
+            const mLatest = mHistory.length ? mHistory[mHistory.length - 1] : {};
+            const metrics = mLatest.metrics || {};
+
+            const followerCount = fLatest.value || 0;
+            const impressions = (metrics.impressions || {}).value || 0;
+            const likes = (metrics.likes || {}).value || 0;
+            const comments = (metrics.comments || {}).value || 0;
+            const shares = (metrics.shares || {}).value || 0;
+
+            let engRate = '0.0%';
+            if (impressions > 0) {
+                engRate = (((likes + comments + shares) / impressions) * 100).toFixed(1) + '%';
+            }
+
+            tbody.innerHTML += `
+                <tr>
+                    <td><strong>${key.charAt(0).toUpperCase() + key.slice(1)}</strong></td>
+                    <td>${followerCount.toLocaleString()}</td>
+                    <td>${impressions.toLocaleString()}</td>
+                    <td>${likes.toLocaleString()}</td>
+                    <td>${comments.toLocaleString()}</td>
+                    <td>${shares.toLocaleString()}</td>
+                    <td>${engRate}</td>
+                </tr>
+            `;
+        }
+    }
+
+    // Run on load
+    document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

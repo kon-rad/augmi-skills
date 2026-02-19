@@ -47,6 +47,12 @@ Once installed, skills are automatically available in Claude Code sessions via s
 | [pdf](#pdf) | Full PDF toolkit: extract, create, merge, split, forms, OCR | - | pypdf, pdfplumber, reportlab |
 | [large-pdf-reader](#large-pdf-reader) | Extract text from large PDFs in chunks | - | pypdf, pdfplumber |
 
+### Analytics & Reporting
+
+| Skill | Description | Slash Commands | APIs Used |
+|-------|-------------|----------------|-----------|
+| [social-analytics](#social-analytics) | Daily social media analytics collection, time-series tracking, markdown + PDF reports with charts | `/social-analytics`, `/social-analytics:collect`, `/social-analytics:report`, `/social-analytics:setup` | Postiz API, Puppeteer, Chart.js |
+
 ### Developer Tools
 
 | Skill | Description | Slash Commands | APIs Used |
@@ -228,6 +234,35 @@ Extracts transcripts from YouTube videos with optional timestamps.
 
 ---
 
+### social-analytics
+
+Daily social media analytics collection and reporting. Pulls metrics from Postiz across LinkedIn, Instagram, X/Twitter, YouTube, and Facebook. Stores time-series data, generates markdown + branded PDF reports with Chart.js charts, and uploads to Google Drive.
+
+**Pipeline**: Collect (Postiz API) -> Aggregate (JSON time-series) -> Report (markdown + PDF) -> Upload (Google Drive)
+
+**Platforms**: Instagram, X/Twitter, LinkedIn (personal + page), YouTube, Facebook
+
+**Reports include**:
+- KPI dashboard: follower counts with daily/weekly/30-day changes
+- Follower growth line chart (last 30 days)
+- Engagement bar chart (likes/comments/shares by platform)
+- Detailed metrics table with engagement rates
+- Recent post performance
+
+**Data Storage**:
+```
+data/social-analytics/
+├── raw/YYYY-MM-DD/        # Daily API snapshots
+├── aggregated/            # Time-series (followers.json, all-metrics.json)
+└── reports/               # Markdown + PDF reports
+```
+
+**Setup**: `npm install -g postiz puppeteer`, `brew install jq`, configure `config/integrations.json` with Postiz integration IDs
+
+**Environment**: `POSTIZ_API_KEY`
+
+---
+
 ## Environment Variables
 
 | Variable | Required By | Get It From |
@@ -236,6 +271,7 @@ Extracts transcripts from YouTube videos with optional timestamps.
 | `FAL_KEY` | ai-film-maker | [fal.ai](https://fal.ai) |
 | `REPLICATE_API_TOKEN` | ai-film-maker | [replicate.com](https://replicate.com) |
 | `TOGETHER_API_KEY` | ai-film-maker | [together.ai](https://together.ai) |
+| `POSTIZ_API_KEY` | social-analytics | [Postiz](https://postiz.com) |
 | `MUSIC_OUTPUT_DIR` | youtube-music-downloader (optional) | Local path |
 
 ## Contributing

@@ -1,0 +1,42 @@
+{
+  "platforms": {
+    "instagram": {
+      "id": "cmlre90pk04d9mn0yosyhnx4o",
+      "name": "Instagram (@augmiworld)",
+      "enabled": true
+    },
+    "twitter": {
+      "id": "cmlrob0gp05g7mn0yncmwzg7c",
+      "name": "X/Twitter (@augmidotworld)",
+      "enabled": true
+    },
+    "linkedin": {
+      "id": "cmlrecmk604dgmn0ylgo0jzbe",
+      "name": "LinkedIn (Konrad Gnat)",
+      "enabled": true
+    },
+    "linkedin-page": {
+      "id": "cmlrecv0r04dimn0yl34lxmzx",
+      "name": "LinkedIn Page (Augmi.world)",
+      "enabled": true
+    },
+    "youtube": {
+      "id": "cmlreb5vl04dcmn0yu3ej283a",
+      "name": "YouTube (@augmiworld)",
+      "enabled": true
+    },
+    "facebook": {
+      "id": "",
+      "name": "Facebook",
+      "enabled": false
+    }
+  },
+  "google_drive": {
+    "folder_path": "augmi/social-analytics",
+    "account": "synducer@gmail.com"
+  },
+  "collection": {
+    "default_days": 7,
+    "first_run_days": 365
+  }
+}
