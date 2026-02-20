@@ -49,7 +49,7 @@ Generate a visual from blog post content provided as text or from a file.
 **Usage:**
 ```bash
 # From a file
-/blog-visual-gen:generate OUTPUT/my-blog-post/blog-post.md
+/blog-visual-gen:generate OUTPUT/20260127/my-blog-post/blog-post.md
 
 # The skill will analyze the content and generate an appropriate visual
 ```
@@ -60,7 +60,7 @@ Generate a visual specifically from a markdown file path.
 
 **Usage:**
 ```bash
-/blog-visual-gen:from-file OUTPUT/my-article/blog-post.md
+/blog-visual-gen:from-file OUTPUT/20260127/social-prediction-markets/blog-post.md
 ```
 
 ## Script Usage
@@ -70,8 +70,8 @@ Generate a visual specifically from a markdown file path.
 ```bash
 # Load env and run
 export $(grep -v '^#' .env | xargs) && python3 .claude/skills/blog-visual-gen/scripts/generate_blog_visual.py \
-  --file OUTPUT/my-blog/blog-post.md \
-  --output OUTPUT/my-blog/images/blog-visual.png
+  --file OUTPUT/20260127/my-blog/blog-post.md \
+  --output OUTPUT/20260127/my-blog/images/blog-visual.png
 ```
 
 ### Basic Usage - From Text

@@ -1,0 +1,52 @@
+{
+  "scraping": {
+    "yt_dlp_binary": "yt-dlp",
+    "flat_playlist_args": ["--flat-playlist", "--print-json"],
+    "detail_args": ["--skip-download", "--print-json"],
+    "detail_fields": ["id", "title", "upload_date", "duration", "view_count", "like_count", "comment_count"],
+    "rate_limit_delay_seconds": 1,
+    "max_detail_concurrent": 5
+  },
+  "analysis": {
+    "hook_patterns": {
+      "question": ["what", "why", "how", "where", "when", "who", "which", "can ", "do ", "does ", "is ", "are ", "did "],
+      "curiosity_gap": ["you won't believe", "the truth about", "nobody knows", "the secret", "what they don't", "you didn't know", "hidden", "shocking", "revealed", "actually"],
+      "superlative": ["most", "best", "worst", "biggest", "smallest", "fastest", "largest", "top", "ultimate", "insane", "incredible", "amazing", "craziest"],
+      "listicle": ["\\d+\\s+(things|ways|reasons|tips|facts|places|countries|cities)"],
+      "emotional": ["scary", "terrifying", "beautiful", "heartbreaking", "hilarious", "disgusting", "disturbing", "satisfying", "mindblowing"],
+      "geographic": ["country", "countries", "city", "cities", "continent", "world", "planet", "earth", "global", "nation"]
+    },
+    "view_buckets": [
+      {"label": "1M+", "min": 1000000},
+      {"label": "100K-1M", "min": 100000, "max": 1000000},
+      {"label": "10K-100K", "min": 10000, "max": 100000},
+      {"label": "1K-10K", "min": 1000, "max": 10000},
+      {"label": "<1K", "max": 1000}
+    ],
+    "top_content_limit": 20,
+    "min_category_videos": 3
+  },
+  "report": {
+    "brand_colors": {
+      "primary": "#1B5E20",
+      "secondary": "#D4A017",
+      "accent": "#00BCD4",
+      "background": "#0a0a0a",
+      "surface": "#1a1a2e",
+      "text": "#e0e0e0"
+    },
+    "chart_palette": [
+      "#D4A017", "#00BCD4", "#4CAF50", "#FF5722",
+      "#9C27B0", "#2196F3", "#FF9800", "#E91E63",
+      "#00E676", "#FF6F00"
+    ]
+  },
+  "google_drive": {
+    "base_folder": "augmi/channel-analytics",
+    "account": "synducer@gmail.com"
+  },
+  "trend_finder": {
+    "script_path": ".claude/skills/trend-finder/scripts/find_trends.py",
+    "max_topics": 5
+  }
+}

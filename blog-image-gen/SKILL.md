@@ -44,8 +44,8 @@ python .claude/skills/blog-image-gen/scripts/generate_blog_images.py \
 Generate all images from an image-prompts.md file:
 ```bash
 python .claude/skills/blog-image-gen/scripts/generate_blog_images.py \
-  --prompts-file OUTPUT/my-blog-post/image-prompts.md \
-  --output-dir OUTPUT/my-blog-post/images
+  --prompts-file OUTPUT/20260119/personal-ai-infrastructure-claude-code/image-prompts.md \
+  --output-dir OUTPUT/20260119/personal-ai-infrastructure-claude-code/images
 ```
 
 ### Options

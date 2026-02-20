@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{CHANNEL_NAME}} — Channel Analytics Report</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            line-height: 1.6;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+        header {
+            text-align: center;
+            padding: 48px 0 32px;
+            border-bottom: 2px solid #D4A017;
+            margin-bottom: 40px;
+        }
+        header h1 {
+            font-size: 2.4rem;
+            color: #D4A017;
+            margin-bottom: 8px;
+        }
+        header .subtitle {
+            color: #888;
+            font-size: 1.1rem;
+        }
+        .overview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+        .stat-card {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid #2a2a4e;
+        }
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #D4A017;
+        }
+        .stat-card .label {
+            font-size: 0.85rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
+        }
+        section {
+            margin-bottom: 48px;
+        }
+        section h2 {
+            font-size: 1.5rem;
+            color: #00BCD4;
+            margin-bottom: 20px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #1a1a2e;
+        }
+        .chart-container {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid #2a2a4e;
+        }
+        .chart-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        .chart-row .chart-container { margin-bottom: 0; }
+        canvas { max-height: 400px; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #1a1a2e;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #2a2a4e;
+        }
+        th {
+            background: #12122a;
+            color: #D4A017;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        td { font-size: 0.95rem; }
+        tr:hover td { background: rgba(212, 160, 23, 0.05); }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-short { background: #00BCD4; color: #000; }
+        .badge-video { background: #D4A017; color: #000; }
+        .insights {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 24px;
+            border-left: 4px solid #D4A017;
+        }
+        .insights h3 { color: #D4A017; margin-bottom: 12px; }
+        .insights ul { padding-left: 20px; }
+        .insights li { margin-bottom: 8px; color: #ccc; }
+        footer {
+            text-align: center;
+            padding: 32px 0;
+            border-top: 1px solid #1a1a2e;
+            color: #555;
+            font-size: 0.85rem;
+        }
+        @media print {
+            body { background: #fff; color: #222; }
+            .stat-card, .chart-container, .insights, table { border: 1px solid #ddd; }
+            .stat-card { background: #f9f9f9; }
+            .chart-container { background: #fff; }
+            .stat-card .value { color: #333; }
+            section h2 { color: #1B5E20; }
+            header h1 { color: #1B5E20; }
+        }
+        @media (max-width: 768px) {
+            .chart-row { grid-template-columns: 1fr; }
+            .overview-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>{{CHANNEL_NAME}}</h1>
+            <p class="subtitle">Channel Performance Report — {{REPORT_DATE}}</p>
+        </header>
+
+        <!-- Overview Stats -->
+        <div class="overview-grid">
+            <div class="stat-card">
+                <div class="value">{{SUBSCRIBERS}}</div>
+                <div class="label">Subscribers</div>
+            </div>
+            <div class="stat-card">
+                <div class="value">{{TOTAL_CONTENT}}</div>
+                <div class="label">Total Content</div>
+            </div>
+            <div class="stat-card">
+                <div class="value">{{TOTAL_VIEWS}}</div>
+                <div class="label">Total Views</div>
+            </div>
+            <div class="stat-card">
+                <div class="value">{{TOTAL_LIKES}}</div>
+                <div class="label">Total Likes</div>
+            </div>
+            <div class="stat-card">
+                <div class="value">{{SHORTS_COUNT}}</div>
+                <div class="label">Shorts</div>
+            </div>
+            <div class="stat-card">
+                <div class="value">{{VIDEOS_COUNT}}</div>
+                <div class="label">Videos</div>
+            </div>
+        </div>
+
+        <!-- Chart 1: Content Split (Doughnut pair) -->
+        <section>
+            <h2>1. Content Split</h2>
+            <div class="chart-row">
+                <div class="chart-container">
+                    <canvas id="contentCountChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <canvas id="viewsSplitChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Chart 2: Top 20 Content -->
+        <section>
+            <h2>2. Top 20 Content by Views</h2>
+            <div class="chart-container">
+                <canvas id="topContentChart" style="max-height: 600px;"></canvas>
+            </div>
+        </section>
+
+        <!-- Chart 3: Hook Patterns -->
+        <section>
+            <h2>3. Hook Pattern Performance</h2>
+            <div class="chart-container">
+                <canvas id="hookPatternsChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Chart 4: Engagement by Category -->
+        <section>
+            <h2>4. Engagement by Category</h2>
+            <div class="chart-container">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Chart 5: View Distribution -->
+        <section>
+            <h2>5. View Distribution</h2>
+            <div class="chart-container">
+                <canvas id="viewDistributionChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Chart 6: Engagement vs Views Scatter -->
+        <section>
+            <h2>6. Engagement vs Views</h2>
+            <div class="chart-container">
+                <canvas id="scatterChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Chart 7: Growth Timeline -->
+        <section id="growthSection">
+            <h2>7. Growth Timeline</h2>
+            <div class="chart-container">
+                <canvas id="growthChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Top Content Table -->
+        <section>
+            <h2>Top Performing Content</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Title</th>
+                        <th>Type</th>
+                        <th>Views</th>
+                    </tr>
+                </thead>
+                <tbody id="topContentTable"></tbody>
+            </table>
+        </section>
+
+        <footer>
+            Generated by Social Media Analyst — Augmi.world
+        </footer>
+    </div>
+
+    <script>
+        // Data injected by generate_html_report.js
+        const DATA = {{DATA_JSON}};
+
+        const PALETTE = ['#D4A017', '#00BCD4', '#4CAF50', '#FF5722', '#9C27B0', '#2196F3', '#FF9800', '#E91E63', '#00E676', '#FF6F00'];
+
+        function fmt(n) {
+            if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+            if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+            return n.toString();
+        }
+
+        Chart.defaults.color = '#aaa';
+        Chart.defaults.borderColor = '#2a2a4e';
+
+        // --- Chart 1a: Content Count Doughnut ---
+        new Chart(document.getElementById('contentCountChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Shorts', 'Videos'],
+                datasets: [{
+                    data: [DATA.overview.total_shorts, DATA.overview.total_videos],
+                    backgroundColor: ['#00BCD4', '#D4A017'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                plugins: {
+                    title: { display: true, text: 'Content Count', color: '#e0e0e0', font: { size: 14 } },
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+
+        // --- Chart 1b: Views Split Doughnut ---
+        new Chart(document.getElementById('viewsSplitChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Shorts Views', 'Video Views'],
+                datasets: [{
+                    data: [DATA.overview.total_shorts_views, DATA.overview.total_video_views],
+                    backgroundColor: ['#00BCD4', '#D4A017'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                plugins: {
+                    title: { display: true, text: 'Views Split', color: '#e0e0e0', font: { size: 14 } },
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+
+        // --- Chart 2: Top 20 Content Horizontal Bar ---
+        const topContent = (DATA.top_content || []).slice(0, 20);
+        new Chart(document.getElementById('topContentChart'), {
+            type: 'bar',
+            data: {
+                labels: topContent.map(c => c.title.length > 50 ? c.title.slice(0, 50) + '...' : c.title),
+                datasets: [{
+                    label: 'Views',
+                    data: topContent.map(c => c.views),
+                    backgroundColor: topContent.map(c => c.type === 'short' ? '#00BCD4' : '#D4A017'),
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: { label: ctx => fmt(ctx.raw) + ' views' }
+                    }
+                },
+                scales: {
+                    x: { ticks: { callback: v => fmt(v) } }
+                }
+            }
+        });
+
+        // --- Chart 3: Hook Patterns Bar ---
+        const hooks = DATA.hook_patterns || {};
+        const hookLabels = Object.keys(hooks);
+        const hookViews = hookLabels.map(k => hooks[k].avg_views);
+        new Chart(document.getElementById('hookPatternsChart'), {
+            type: 'bar',
+            data: {
+                labels: hookLabels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
+                datasets: [{
+                    label: 'Avg Views',
+                    data: hookViews,
+                    backgroundColor: hookLabels.map((_, i) => PALETTE[i % PALETTE.length]),
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: ctx => fmt(ctx.raw) + ' avg views' } }
+                },
+                scales: {
+                    y: { ticks: { callback: v => fmt(v) } }
+                }
+            }
+        });
+
+        // --- Chart 4: Engagement by Category (Stacked Bar) ---
+        const cats = DATA.categories || {};
+        const catLabels = Object.keys(cats).slice(0, 12);
+        new Chart(document.getElementById('categoryChart'), {
+            type: 'bar',
+            data: {
+                labels: catLabels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
+                datasets: [
+                    {
+                        label: 'Likes',
+                        data: catLabels.map(k => cats[k].total_likes),
+                        backgroundColor: '#D4A017'
+                    },
+                    {
+                        label: 'Comments',
+                        data: catLabels.map(k => cats[k].total_comments),
+                        backgroundColor: '#00BCD4'
+                    }
+                ]
+            },
+            options: {
+                plugins: { legend: { position: 'top' } },
+                scales: {
+                    x: { stacked: true },
+                    y: { stacked: true, ticks: { callback: v => fmt(v) } }
+                }
+            }
+        });
+
+        // --- Chart 5: View Distribution ---
+        const distShorts = DATA.view_distribution?.shorts || {};
+        const distLabels = Object.keys(distShorts);
+        new Chart(document.getElementById('viewDistributionChart'), {
+            type: 'bar',
+            data: {
+                labels: distLabels,
+                datasets: [
+                    {
+                        label: 'Shorts',
+                        data: distLabels.map(k => distShorts[k] || 0),
+                        backgroundColor: '#00BCD4'
+                    },
+                    {
+                        label: 'Videos',
+                        data: distLabels.map(k => (DATA.view_distribution?.videos || {})[k] || 0),
+                        backgroundColor: '#D4A017'
+                    }
+                ]
+            },
+            options: {
+                plugins: { legend: { position: 'top' } },
+                scales: { x: { stacked: true }, y: { stacked: true } }
+            }
+        });
+
+        // --- Chart 6: Engagement vs Views Scatter ---
+        const scatterData = [
+            ...(DATA.engagement_scatter?.shorts || []).map(d => ({
+                x: d.views, y: d.engagement_rate, label: d.title, q: d.quadrant, type: 'short'
+            })),
+            ...(DATA.engagement_scatter?.videos || []).map(d => ({
+                x: d.views, y: d.engagement_rate, label: d.title, q: d.quadrant, type: 'video'
+            }))
+        ];
+        const quadrantColors = {
+            balanced_hit: '#4CAF50',
+            underrated: '#2196F3',
+            clickbait: '#FF5722',
+            overperformer: '#D4A017'
+        };
+        new Chart(document.getElementById('scatterChart'), {
+            type: 'scatter',
+            data: {
+                datasets: Object.entries(quadrantColors).map(([q, color]) => ({
+                    label: q.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                    data: scatterData.filter(d => d.q === q).map(d => ({ x: d.x, y: d.y })),
+                    backgroundColor: color,
+                    pointRadius: 5
+                }))
+            },
+            options: {
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => {
+                                const d = scatterData.filter(s => s.q === Object.keys(quadrantColors)[ctx.datasetIndex])[ctx.dataIndex];
+                                return d ? `${d.label?.slice(0, 40)} — ${fmt(d.x)} views, ${d.y}%` : '';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { title: { display: true, text: 'Views', color: '#aaa' }, ticks: { callback: v => fmt(v) } },
+                    y: { title: { display: true, text: 'Engagement Rate %', color: '#aaa' } }
+                }
+            }
+        });
+
+        // --- Chart 7: Growth Timeline ---
+        const monthly = DATA.monthly_views || {};
+        const months = Object.keys(monthly);
+        if (months.length > 1) {
+            new Chart(document.getElementById('growthChart'), {
+                type: 'line',
+                data: {
+                    labels: months,
+                    datasets: [{
+                        label: 'Views per Month',
+                        data: months.map(m => monthly[m].views),
+                        borderColor: '#D4A017',
+                        backgroundColor: 'rgba(212, 160, 23, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3
+                    }, {
+                        label: 'Uploads per Month',
+                        data: months.map(m => monthly[m].count),
+                        borderColor: '#00BCD4',
+                        backgroundColor: 'rgba(0, 188, 212, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    plugins: { legend: { position: 'top' } },
+                    scales: {
+                        y: { title: { display: true, text: 'Views', color: '#aaa' }, ticks: { callback: v => fmt(v) } },
+                        y1: { position: 'right', title: { display: true, text: 'Uploads', color: '#aaa' }, grid: { drawOnChartArea: false } }
+                    }
+                }
+            });
+        } else {
+            document.getElementById('growthSection').style.display = 'none';
+        }
+
+        // --- Top Content Table ---
+        const tbody = document.getElementById('topContentTable');
+        topContent.forEach((item, i) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${i + 1}</td>
+                <td>${item.title}</td>
+                <td><span class="badge badge-${item.type}">${item.type}</span></td>
+                <td>${fmt(item.views)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    </script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # YouTube Music Downloader
 
-Download YouTube videos as MP3 files to a local music folder.
+Download YouTube videos as MP3 files to the local MUSIC folder.
 
 ## Triggers
 
@@ -21,19 +21,7 @@ or
 pip install yt-dlp
 ```
 
-ffmpeg is also required for audio conversion:
-```bash
-brew install ffmpeg
-```
-
-## Configuration
-
-Set the output directory for downloads. Default: `~/Music/downloads/`
-
-You can override by setting the `MUSIC_OUTPUT_DIR` environment variable:
-```bash
-export MUSIC_OUTPUT_DIR="$HOME/Music/downloads/"
-```
+ffmpeg is also required for audio conversion (already installed).
 
 ## Input Formats
 
@@ -46,29 +34,35 @@ The skill accepts:
    - "Never Gonna Give You Up Rick Astley"
    - "lofi hip hop beats"
 
+## Output Location
+
+All downloads go to: `/Users/konradgnat/dev/notes/MUSIC/2025/`
+
+Files are named as: `%(title)s.%(ext)s`
+
 ## Commands
 
 ### Download from URL(s)
 
 For a single URL:
 ```bash
-yt-dlp -x --audio-format mp3 --audio-quality 0 -o "${MUSIC_OUTPUT_DIR:-$HOME/Music/downloads}/%(title)s.%(ext)s" "URL"
+yt-dlp -x --audio-format mp3 --audio-quality 0 -o "/Users/konradgnat/dev/notes/MUSIC/2025/%(title)s.%(ext)s" "URL"
 ```
 
 For multiple URLs:
 ```bash
-yt-dlp -x --audio-format mp3 --audio-quality 0 -o "${MUSIC_OUTPUT_DIR:-$HOME/Music/downloads}/%(title)s.%(ext)s" "URL1" "URL2" "URL3"
+yt-dlp -x --audio-format mp3 --audio-quality 0 -o "/Users/konradgnat/dev/notes/MUSIC/2025/%(title)s.%(ext)s" "URL1" "URL2" "URL3"
 ```
 
 ### Download by Search Query
 
 ```bash
-yt-dlp -x --audio-format mp3 --audio-quality 0 -o "${MUSIC_OUTPUT_DIR:-$HOME/Music/downloads}/%(title)s.%(ext)s" "ytsearch:SEARCH_QUERY"
+yt-dlp -x --audio-format mp3 --audio-quality 0 -o "/Users/konradgnat/dev/notes/MUSIC/2025/%(title)s.%(ext)s" "ytsearch:SEARCH_QUERY"
 ```
 
 For multiple results from search:
 ```bash
-yt-dlp -x --audio-format mp3 --audio-quality 0 -o "${MUSIC_OUTPUT_DIR:-$HOME/Music/downloads}/%(title)s.%(ext)s" "ytsearch5:SEARCH_QUERY"
+yt-dlp -x --audio-format mp3 --audio-quality 0 -o "/Users/konradgnat/dev/notes/MUSIC/2025/%(title)s.%(ext)s" "ytsearch5:SEARCH_QUERY"
 ```
 (The number after ytsearch specifies how many results to download)
 
@@ -82,10 +76,9 @@ yt-dlp -x --audio-format mp3 --audio-quality 0 -o "${MUSIC_OUTPUT_DIR:-$HOME/Mus
 ## Workflow
 
 1. Check if yt-dlp is installed, install if needed
-2. Determine output directory (env var or default)
-3. Parse user input (URLs or search query)
-4. Run yt-dlp command
-5. Confirm download completion and show file location
+2. Parse user input (URLs or search query)
+3. Run yt-dlp command
+4. Confirm download completion and show file location
 
 ## Example Usage
 
@@ -93,12 +86,12 @@ User: "Download this song https://www.youtube.com/watch?v=w-7AnlFkc3s"
 
 Response:
 ```bash
-yt-dlp -x --audio-format mp3 --audio-quality 0 -o "$HOME/Music/downloads/%(title)s.%(ext)s" "https://www.youtube.com/watch?v=w-7AnlFkc3s"
+yt-dlp -x --audio-format mp3 --audio-quality 0 -o "/Users/konradgnat/dev/notes/MUSIC/2025/%(title)s.%(ext)s" "https://www.youtube.com/watch?v=w-7AnlFkc3s"
 ```
 
 User: "Download Bohemian Rhapsody by Queen"
 
 Response:
 ```bash
-yt-dlp -x --audio-format mp3 --audio-quality 0 -o "$HOME/Music/downloads/%(title)s.%(ext)s" "ytsearch:Bohemian Rhapsody Queen"
+yt-dlp -x --audio-format mp3 --audio-quality 0 -o "/Users/konradgnat/dev/notes/MUSIC/2025/%(title)s.%(ext)s" "ytsearch:Bohemian Rhapsody Queen"
 ```

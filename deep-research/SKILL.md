@@ -1,6 +1,8 @@
 ---
 name: deep-research
+user-invocable: true
 description: Deep research workflow that takes a topic and links, conducts comprehensive research across web and social media, creates executive summaries, finds patterns and connections, then produces analysis documents, Twitter threads, blog posts, and YouTube scripts. Use this skill when the user wants to deeply research a topic, analyze multiple sources, and create multi-format content from the research.
+allowed-tools: Bash, Read, Write, Glob, Grep, WebSearch, WebFetch, Task
 ---
 
 # Deep Research Skill
@@ -77,10 +79,21 @@ Create final content outputs:
 - **YouTube Script:** Video script with visual cues and talking points
 - **Viral Tweets:** Standalone viral tweets (10 tweets)
 - **LinkedIn Post:** 3 LinkedIn post variants
-- **Image Prompts:** 5-7 image generation prompts for blog visuals
+- **Image Prompts:** 5-7 Midjourney/Imagen prompts for blog visuals
 
 **Input:** Pattern analysis
 **Output:** All content files in OUTPUT folder
+
+**IMPORTANT - Blog Writing Guidelines:**
+Before producing blog content, read and follow the blog writing standards in:
+`apps/global-builders-club/CLAUDE.md` (see "Blog Writing Standards: Accuracy and Honesty" section)
+
+Key requirements:
+- Be accurate about source counts (e.g., "based on 8 sources" not "extensive research")
+- Never fabricate timeframes (no "weeks of research" claims)
+- Write as an informed synthesizer, not claiming personal expertise
+- Cite actual sources used
+- Avoid first-person claims of extended effort
 
 **Timestamp:** Each output file should include a `generated_at` timestamp in the frontmatter or metadata section indicating when the content was created (ISO 8601 format: YYYY-MM-DDTHH:MM:SS)
 
@@ -91,7 +104,7 @@ Create final content outputs:
 /deep-research:full topic: "AI Agents" links: [url1, url2, url3]
 ```
 
-Runs all phases automatically: Research -> Summarize -> Analyze -> Produce
+Runs all phases automatically: Research → Summarize → Analyze → Produce
 
 ### Individual Phases (Manual Control)
 ```
@@ -210,16 +223,6 @@ reading_time: "[N] min"
 Key timestamps for description
 ```
 
-## Blog Writing Standards
-
-When producing blog posts, follow these accuracy and honesty guidelines:
-
-1. **Accurate source counts** - Say "analyzed 12 sources" if you analyzed 12, not "extensive research"
-2. **No fabricated timeframes** - Never claim "weeks of research" or "months of investigation"
-3. **Synthesizer voice** - Write as someone synthesizing research, not claiming personal expertise
-4. **Specific citations** - Link to actual sources used
-5. **No exaggeration** - Let quality speak for itself; avoid inflating credibility
-
 ## Notes
 
 - All research respects rate limits and terms of service
@@ -227,3 +230,16 @@ When producing blog posts, follow these accuracy and honesty guidelines:
 - Web scraping uses respectful delays
 - All sources are attributed and linked
 - Date format: YYYYMMDD (e.g., 20260119)
+
+## Blog Writing Standards Reference
+
+**CRITICAL:** When producing blog posts for Global Builders Club, you MUST follow the accuracy and honesty guidelines in:
+
+📄 **`apps/global-builders-club/CLAUDE.md`** → "Blog Writing Standards: Accuracy and Honesty"
+
+Summary of key rules:
+1. **Accurate source counts** - Say "analyzed 12 sources" if you analyzed 12, not "extensive research"
+2. **No fabricated timeframes** - Never claim "weeks of research" or "months of investigation"
+3. **Synthesizer voice** - Write as someone synthesizing research, not claiming personal expertise
+4. **Specific citations** - Link to actual sources used
+5. **No exaggeration** - Let quality speak for itself; avoid inflating credibility
