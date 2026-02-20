@@ -728,11 +728,11 @@ def cmd_activate(model=None):
     subscription for ALL LLM calls. This:
     1. Extracts the OAuth token from claude login credentials
     2. Saves it persistently to /data/ (survives restarts)
-    3. Calls the AUGMI API to update machine env vars:
+    3. Calls the Augmi API to update machine env vars:
        - Sets CLAUDE_CODE_OAUTH_TOKEN
        - Clears ANTHROPIC_API_KEY (it takes priority over subscription)
        - Switches model to a Claude model
-    4. Falls back to direct Fly.io API if AUGMI API fails
+    4. Falls back to direct Fly.io API if Augmi API fails
     5. The machine restarts with subscription auth active
     """
     import urllib.request
@@ -856,7 +856,7 @@ def cmd_activate(model=None):
     except IOError as e:
         pass  # Non-fatal
 
-    # Step 4: Try AUGMI API to update machine env vars and restart
+    # Step 4: Try Augmi API to update machine env vars and restart
     augmi_url = os.environ.get("AUGMI_API_URL", "")
     project_id = os.environ.get("PROJECT_ID", "")
     container_key = os.environ.get("CONTAINER_API_KEY", "")
@@ -864,7 +864,7 @@ def cmd_activate(model=None):
     api_method = None
     api_error = None
 
-    # Attempt 4a: AUGMI provider API
+    # Attempt 4a: Augmi provider API
     if augmi_url and project_id and container_key:
         try:
             payload = json.dumps({
@@ -888,7 +888,7 @@ def cmd_activate(model=None):
         except Exception as e:
             api_error = str(e)[:200]
 
-    # Attempt 4b: Direct Fly.io Machines API (if AUGMI API failed)
+    # Attempt 4b: Direct Fly.io Machines API (if Augmi API failed)
     fly_token = os.environ.get("FLY_API_TOKEN", "")
     if not api_method and fly_token and machine_id:
         fly_app = os.environ.get("FLY_APP_NAME", "hexly-sandboxes")
@@ -949,12 +949,12 @@ def cmd_activate(model=None):
             "OAuth token extracted and saved to persistent storage, but "
             "could not update machine env vars automatically. "
             "The token is saved and will work on next restart if start.sh "
-            "checks for it. To restart now, use the AUGMI dashboard."
+            "checks for it. To restart now, use the Augmi dashboard."
         )
         if api_error:
             result["api_error"] = api_error
         result["manual_steps"] = [
-            "Option 1: Restart from AUGMI dashboard",
+            "Option 1: Restart from Augmi dashboard",
             "Option 2: flyctl machines restart " + (machine_id or "<machine_id>") + " -a hexly-sandboxes",
             "Option 3: Ask the admin to set CLAUDE_CODE_OAUTH_TOKEN on the machine",
         ]
@@ -1027,7 +1027,8 @@ def cmd_set_token():
         try:
             result = subprocess.run(
                 ["openclaw", "models", "auth", "paste-token",
-                 "--provider", "anthropic"],
+                 "--provider", "anthropic",
+                 "--profile-id", "anthropic:default"],
                 input=token + "\n",
                 capture_output=True, text=True, timeout=15,
             )
@@ -1038,21 +1039,48 @@ def cmd_set_token():
         except Exception as e:
             errors.append(f"paste-token: {str(e)[:200]}")
 
-        # Set model via CLI (works regardless of paste-token result)
+        # Set model via CLI — try high-level command first, fall back to config set
+        model_set_ok = False
         try:
-            model_json = json.dumps({
-                "primary": model,
-                "fallbacks": ["anthropic/claude-sonnet-4"],
-            })
             result = subprocess.run(
-                ["openclaw", "config", "set",
-                 "agents.defaults.model", "--json", model_json],
+                ["openclaw", "models", "set", model],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0:
+                model_set_ok = True
+            else:
+                errors.append(f"models set: {result.stderr[:200]}")
+        except Exception as e:
+            errors.append(f"models set: {str(e)[:200]}")
+
+        if not model_set_ok:
+            # Fall back to config set with empty fallbacks (avoids invalid model names)
+            try:
+                model_json = json.dumps({
+                    "primary": model,
+                    "fallbacks": [],
+                })
+                result = subprocess.run(
+                    ["openclaw", "config", "set",
+                     "agents.defaults.model", "--json", model_json],
+                    capture_output=True, text=True, timeout=10,
+                )
+                if result.returncode != 0:
+                    errors.append(f"config set model: {result.stderr[:200]}")
+            except Exception as e:
+                errors.append(f"config set model: {str(e)[:200]}")
+
+        # Clear fallbacks — invalid fallback models cause "Unknown model" errors at session start
+        try:
+            result = subprocess.run(
+                ["openclaw", "models", "fallbacks", "clear"],
                 capture_output=True, text=True, timeout=10,
             )
             if result.returncode != 0:
-                errors.append(f"config set model: {result.stderr[:200]}")
+                # Not fatal — fallbacks may already be empty or command not available
+                errors.append(f"fallbacks clear: {result.stderr[:100]}")
         except Exception as e:
-            errors.append(f"config set model: {str(e)[:200]}")
+            errors.append(f"fallbacks clear: {str(e)[:100]}")
 
     # ── Method 2: Direct config modification (fallback) ──
     # If the CLI didn't work, modify openclaw.json directly.
@@ -1091,10 +1119,8 @@ def cmd_set_token():
                 config["agents"]["defaults"] = {}
 
             config["agents"]["defaults"]["model"] = {
-                "primary": f"claude-subscription/{model.split('/')[-1]}",
-                "fallbacks": [
-                    f"claude-subscription/claude-sonnet-4",
-                ],
+                "primary": model,   # model already has full provider/name format
+                "fallbacks": [],    # Empty — invalid fallbacks cause immediate session failure
             }
 
             with open(config_file, "w") as f:

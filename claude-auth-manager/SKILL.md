@@ -102,11 +102,11 @@ python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py activate anth
 **CRITICAL: Run this after `claude login` succeeds.** This command:
 1. Reads the OAuth token from `~/.claude/.credentials.json`
 2. Saves it to `/data/.claude-subscription-token` (persistent across restarts)
-3. Calls AUGMI API (`PUT /api/agents/{id}/provider`) to:
+3. Calls Augmi API (`PUT /api/agents/{id}/provider`) to:
    - Set `CLAUDE_CODE_OAUTH_TOKEN` on the machine
    - Clear `ANTHROPIC_API_KEY` (it takes priority over subscription)
    - Switch the model to a Claude model
-4. Falls back to Fly.io Machines API if AUGMI API fails
+4. Falls back to Fly.io Machines API if Augmi API fails
 5. Machine restarts automatically with subscription auth
 
 This switches OpenClaw from API keys to the Claude Code subscription for ALL LLM calls.
@@ -172,7 +172,7 @@ When the user sends a token starting with `sk-ant-`:
 python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py set-token "<token>"
 ```
 This will:
-1. Try `openclaw models auth paste-token` to apply auth at runtime (no restart)
+1. Try `openclaw models auth paste-token --profile-id anthropic:default` to apply auth at runtime (no restart)
 2. Set the model to `anthropic/claude-sonnet-4-20250514` via `openclaw config set`
 3. Fall back to direct config modification if CLI method fails
 4. Save persistence files so the config survives restarts
@@ -240,7 +240,7 @@ python3 .claude/skills/claude-auth-manager/scripts/auth_manager.py activate
 ## Notes
 
 - **`set-token` is the recommended method** — it bypasses all credential file issues
-- The AUGMI API (`PUT /api/agents/{id}/provider`) handles machine env var updates
+- The Augmi API (`PUT /api/agents/{id}/provider`) handles machine env var updates
 - OAuth tokens expire periodically — users may need to re-send their token
 - All output is JSON for easy parsing by the AI agent
 - The script has zero external dependencies (Python 3 standard library only)
