@@ -156,6 +156,90 @@ def collect_post_analytics(days: int, date_dir: Path) -> list:
     return collected
 
 
+def aggregate_post_metrics_by_platform(date_dir: Path, config: dict) -> dict:
+    """Aggregate post-level analytics by platform as fallback for empty platform APIs.
+
+    Returns dict of {platform_key: synthetic_api_data} for platforms that had
+    no platform-level data but do have post-level data.
+    """
+    posts_dir = date_dir / "posts"
+    if not posts_dir.exists():
+        return {}
+
+    # Build integration_id -> platform_key mapping
+    id_to_platform = {}
+    for platform_key, platform_config in config["platforms"].items():
+        if platform_config.get("enabled") and platform_config.get("id"):
+            id_to_platform[platform_config["id"]] = platform_key
+
+    # Aggregate post metrics by platform
+    platform_totals = {}  # {platform_key: {metric_label: total_value}}
+    for post_file in posts_dir.glob("*.json"):
+        try:
+            with open(post_file, "r") as f:
+                post_data = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            continue
+
+        integration = post_data.get("post_info", {}).get("integration", {})
+        integration_id = integration.get("id", "")
+        platform_key = id_to_platform.get(integration_id)
+        if not platform_key:
+            continue
+
+        if platform_key not in platform_totals:
+            platform_totals[platform_key] = {}
+
+        analytics = post_data.get("analytics", [])
+        if not isinstance(analytics, list):
+            continue
+
+        for metric in analytics:
+            label = metric.get("label", "")
+            data_points = metric.get("data", [])
+            for dp in data_points:
+                val = dp.get("total", 0)
+                if isinstance(val, str):
+                    try:
+                        val = float(val) if '.' in val else int(val)
+                    except ValueError:
+                        val = 0
+                platform_totals[platform_key][label] = (
+                    platform_totals[platform_key].get(label, 0) + val
+                )
+
+    # Convert to Postiz-like API format for compatibility with update_aggregated_data
+    result = {}
+    today = date_dir.name  # directory name is the date
+    for platform_key, metrics in platform_totals.items():
+        synthetic_data = []
+        for label, total in metrics.items():
+            synthetic_data.append({
+                "label": label,
+                "percentageChange": 0,
+                "data": [{"total": total, "date": today}]
+            })
+        if synthetic_data:
+            result[platform_key] = synthetic_data
+            post_count = sum(1 for pf in posts_dir.glob("*.json")
+                            if _post_belongs_to_platform(pf, id_to_platform, platform_key))
+            print(f"  Aggregated {platform_key} from {post_count} posts: "
+                  f"{', '.join(f'{k}={v}' for k, v in sorted(metrics.items()))}")
+
+    return result
+
+
+def _post_belongs_to_platform(post_file: Path, id_to_platform: dict, target_platform: str) -> bool:
+    """Check if a post file belongs to a specific platform."""
+    try:
+        with open(post_file, "r") as f:
+            data = json.load(f)
+        integration_id = data.get("post_info", {}).get("integration", {}).get("id", "")
+        return id_to_platform.get(integration_id) == target_platform
+    except (json.JSONDecodeError, IOError):
+        return False
+
+
 def update_aggregated_data(output_dir: Path, today: str, platform_results: dict):
     """Update aggregated time-series files with today's data."""
     agg_dir = output_dir / "aggregated"
@@ -205,16 +289,48 @@ def update_aggregated_data(output_dir: Path, today: str, platform_results: dict)
         platform_metrics = {}
         follower_count = None
 
+        # Metrics that represent cumulative totals (use latest non-zero value)
+        SNAPSHOT_METRICS = {"followers", "following", "organic followers", "paid followers", "videos"}
+        # Metrics that are averages (use latest non-zero value)
+        AVERAGE_METRICS = {"average view duration", "average view percentage", "engagement"}
+
         if isinstance(data, list):
             for metric in data:
                 label = metric.get("label", "").lower()
                 metric_data = metric.get("data", [])
                 percentage_change = metric.get("percentageChange", 0)
+                is_average = metric.get("average", False) or label in AVERAGE_METRICS
 
-                # Get latest value
+                # Get the best representative value from the time series
+                # For snapshot/cumulative metrics: use latest non-zero value
+                # For average metrics: use latest non-zero value
+                # For activity metrics (likes, views, etc.): sum the period
                 latest_value = 0
                 if metric_data:
-                    latest_value = metric_data[-1].get("total", 0)
+                    if label in SNAPSHOT_METRICS or is_average:
+                        # Use latest non-zero value (handles API lag)
+                        for entry in reversed(metric_data):
+                            val = entry.get("total", 0)
+                            if isinstance(val, str):
+                                try:
+                                    val = float(val) if '.' in val else int(val)
+                                except ValueError:
+                                    val = 0
+                            if val != 0:
+                                latest_value = val
+                                break
+                    else:
+                        # Activity metrics: sum across the period
+                        total = 0
+                        for entry in metric_data:
+                            val = entry.get("total", 0)
+                            if isinstance(val, str):
+                                try:
+                                    val = float(val) if '.' in val else int(val)
+                                except ValueError:
+                                    val = 0
+                            total += val
+                        latest_value = total
 
                 platform_metrics[label] = {
                     "value": latest_value,
@@ -222,7 +338,7 @@ def update_aggregated_data(output_dir: Path, today: str, platform_results: dict)
                     "time_series": metric_data
                 }
 
-                if "follower" in label:
+                if "follower" in label and label in SNAPSHOT_METRICS:
                     follower_count = latest_value
 
         # Update followers history
@@ -232,8 +348,11 @@ def update_aggregated_data(output_dir: Path, today: str, platform_results: dict)
             if hist:
                 prev_count = hist[-1].get("value", 0)
 
-            # Only add if this is a new date
-            if not hist or hist[-1].get("date") != today:
+            # Add or update today's entry
+            if hist and hist[-1].get("date") == today:
+                hist[-1]["value"] = follower_count
+                hist[-1]["change"] = follower_count - prev_count
+            else:
                 hist.append({
                     "date": today,
                     "value": follower_count,
@@ -241,9 +360,11 @@ def update_aggregated_data(output_dir: Path, today: str, platform_results: dict)
                 })
             total_followers += follower_count
 
-        # Update all-metrics history
+        # Update all-metrics history (add or update today's entry)
         metrics_hist = all_metrics["platforms"][platform_key]["history"]
-        if not metrics_hist or metrics_hist[-1].get("date") != today:
+        if metrics_hist and metrics_hist[-1].get("date") == today:
+            metrics_hist[-1]["metrics"] = platform_metrics
+        elif not metrics_hist or metrics_hist[-1].get("date") != today:
             metrics_hist.append({
                 "date": today,
                 "metrics": platform_metrics
@@ -252,7 +373,10 @@ def update_aggregated_data(output_dir: Path, today: str, platform_results: dict)
     # Update total followers
     if total_followers > 0:
         total_hist = followers_data["total"]["history"]
-        if not total_hist or total_hist[-1].get("date") != today:
+        if total_hist and total_hist[-1].get("date") == today:
+            total_hist[-1]["total"] = total_followers
+            total_hist[-1]["change"] = total_followers - prev_total
+        elif not total_hist or total_hist[-1].get("date") != today:
             total_hist.append({
                 "date": today,
                 "total": total_followers,
@@ -329,6 +453,17 @@ def main():
 
     # Collect post-level analytics
     post_ids = collect_post_analytics(min(days, 30), date_dir)
+
+    # Backfill platforms that returned empty API data with post-level aggregation
+    empty_platforms = [k for k, v in platform_results.items() if v is None]
+    if empty_platforms:
+        print()
+        print(f"  Backfilling empty platforms from post data: {', '.join(empty_platforms)}")
+        post_aggregation = aggregate_post_metrics_by_platform(date_dir, config)
+        for platform_key, synthetic_data in post_aggregation.items():
+            if platform_key in empty_platforms:
+                platform_results[platform_key] = synthetic_data
+                success_count += 1
 
     print()
 

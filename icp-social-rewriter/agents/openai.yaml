@@ -1,0 +1,4 @@
+interface:
+  display_name: "ICP Social Rewriter"
+  short_description: "Rewrites social content for Augmi privacy-first power users."
+  default_prompt: "Rewrite this draft for our Augmi ICP across Instagram, LinkedIn, and Twitter with stronger hooks and clear CTA."

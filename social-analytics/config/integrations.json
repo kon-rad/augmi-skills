@@ -5,15 +5,20 @@
       "name": "Instagram (@augmiworld)",
       "enabled": true
     },
+    "tiktok": {
+      "id": "cmlvt147s01yqny0yr1cqlf3a",
+      "name": "TikTok (@augmidotworld)",
+      "enabled": true
+    },
     "twitter": {
       "id": "cmlrob0gp05g7mn0yncmwzg7c",
       "name": "X/Twitter (@augmidotworld)",
-      "enabled": true
+      "enabled": false
     },
     "linkedin": {
       "id": "cmlrecmk604dgmn0ylgo0jzbe",
       "name": "LinkedIn (Konrad Gnat)",
-      "enabled": true
+      "enabled": false
     },
     "linkedin-page": {
       "id": "cmlrecv0r04dimn0yl34lxmzx",

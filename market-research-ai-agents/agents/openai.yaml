@@ -1,0 +1,4 @@
+interface:
+  display_name: "Market Research AI Agents"
+  short_description: "Find latest AI-agent trends and rank viral ICP-fit angles."
+  default_prompt: "Run market research for AI agents, OpenClaw, and AI agent economy. Use latest signals, then return top viral angles ranked by ICP fit."
