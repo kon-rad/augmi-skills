@@ -2,15 +2,392 @@
 name: social-content-engine
 user-invocable: true
 description: >
-  Full trend-to-content pipeline: discovers trending topics, scores them for virality
-  and Augmi relevance, researches the top 3, writes platform-adapted content (blog,
-  Twitter thread, Instagram carousel, LinkedIn post), generates images, and saves
-  to Google Drive. Triggers on "social content", "content engine", "trending content",
-  "create social posts", or "content pipeline".
-allowed-tools: Bash, Read, Write, WebSearch, WebFetch, Task
+  Self-improving content engine: grades recent content quality, analyzes performance
+  data from social-analytics, researches viral trends, proposes improvements to
+  content thesis and style guides, and applies refinements. Includes full
+  trend-to-content pipeline with video production via ai-film-maker and
+  short-form-video-ai skills. Run 3x daily via /loop 8h or manually.
+  Triggers on "social content", "content engine", "improve content",
+  "self improve", "content loop", "grade content", "refine strategy".
+allowed-tools: Bash, Read, Write, Edit, WebSearch, WebFetch, Task, Agent, Glob, Grep
 ---
 
-# Social Content Engine
+# Social Content Engine — Self-Improving Content System
+
+Self-improving content engine that grades content, analyzes performance, researches trends, and refines strategy files automatically. Designed to run 3x daily as a loop.
+
+Also includes the full trend-to-content pipeline for creating platform-adapted content (text, images, and video).
+
+---
+
+## Configuration & Setup
+
+### Required Skills (Dependencies)
+
+This skill orchestrates several other skills. Ensure these are installed in `.claude/skills/`:
+
+| Skill | Purpose | Required For |
+|-------|---------|-------------|
+| **social-analytics** | Collects metrics from all platforms, generates reports | Performance data for grading & analysis |
+| **ai-film-maker** | Creates 30-second AI short films from concepts | Video content for social posts |
+| **short-form-video-ai** | Generates 30-60s vertical videos with captions | YouTube Shorts, Reels, TikTok content |
+| **trend-finder** | Google Trends discovery | Phase 1: DISCOVER |
+| **blog-image-gen** | Generates images via Gemini Imagen | Phase 5: IMAGES |
+| **carousel-image-gen** | Generates branded Instagram carousel images | Instagram carousel posts |
+| **humanizer** | Removes AI writing patterns | **MUST run before posting** to any platform |
+| **postiz** | Schedules and publishes social posts | Publishing to all platforms |
+
+### Required API Keys (in `.env.local`)
+
+| Key | Purpose | Required For |
+|-----|---------|-------------|
+| `POSTIZ_API_KEY` | Postiz social scheduling API | Publishing posts, analytics collection |
+| `TWITTERAPI_IO_KEY` | TwitterAPI.io ($0.15/1K tweets) | X/Twitter analytics & trend research |
+| `GEMINI_API_KEY` | Google AI (Imagen, Gemini Vision) | Image generation, video scene creation |
+| `FAL_KEY` | Fal.ai API | Video generation (Kling), background music (Lyria2) |
+| `DEEPGRAM_API_KEY` | Deepgram TTS | Voice narration for short-form videos |
+
+### Required CLI Tools
+
+```bash
+# Social analytics & posting
+npm install -g postiz puppeteer
+
+# Image generation
+pip3 install google-genai pillow requests --break-system-packages
+
+# Video production (for ai-film-maker / short-form-video-ai)
+pip3 install fal-client --break-system-packages
+brew install ffmpeg  # Required for video composition
+```
+
+### Data Sources (from social-analytics skill)
+
+The self-improvement loop reads real metrics from these files. Run `/social-analytics` first to populate them:
+
+| File | Content | Updated By |
+|------|---------|-----------|
+| `data/social-analytics/aggregated/followers.json` | Follower time-series per platform | social-analytics collect |
+| `data/social-analytics/aggregated/all-metrics.json` | All engagement metrics history | social-analytics collect |
+| `data/social-analytics/viral-growth-strategy.md` | KPIs, platform performance, recommendations | social-analytics + this skill |
+| `data/social-analytics/business-thesis.md` | Growth thesis, content principles, 30-day targets | social-analytics + this skill |
+| `data/social-analytics/reports/YYYY-MM-DD-daily.md` | Daily analytics report | social-analytics report |
+| `data/social-analytics/reports/YYYY-MM-DD-comprehensive.pdf` | Branded PDF with charts | social-analytics report |
+
+### Analytics Report Style Guide
+
+For PDF report branding, colors, chart specs, and logo usage, see:
+`.claude/skills/social-analytics/analytics-report-style-guide.md`
+
+### Strategy & Content Files (read/written by this skill)
+
+| File | Purpose |
+|------|---------|
+| `content/strategy/content-thesis.md` | Viral growth thesis, content principles, trend radar |
+| `content/strategy/content-grades.md` | Content quality grades history |
+| `content/strategy/posting-log.md` | Post IDs, timestamps, platforms (update after every post) |
+| `content/strategy/twitter-viral-strategy.md` | X/Twitter-specific style guide |
+| `social-engine-guide.md` | Business model, niche definition, audience profile |
+| `content/strategy/viral-growth-week1/strategy.md` | Campaign strategy (if exists) |
+| `content/strategy/trend-research/` | Scouted trends (PROPOSED → SELECTED → RESEARCHED → PUBLISHED) |
+
+### Platform Accounts
+
+| Platform | Handle | Analytics Source |
+|----------|--------|-----------------|
+| Instagram | @augmiworld | Postiz API |
+| X/Twitter | @augmidotworld | TwitterAPI.io |
+| TikTok | @augmidotworld | Postiz API |
+| YouTube | @augmiworld | Postiz API |
+| LinkedIn Page | Augmi.world | Postiz API |
+| LinkedIn Personal | Konrad Gnat | Postiz API (post-level backfill) |
+
+### Content Production Capabilities
+
+| Content Type | Skill Used | Output Format |
+|-------------|-----------|---------------|
+| Blog post (800-1200 words) | This skill (templates) | Markdown |
+| Twitter/X thread (5-10 tweets) | This skill (templates) | Markdown |
+| Instagram carousel (7-10 slides) | carousel-image-gen | Markdown + PNG images |
+| LinkedIn post (150-300 words) | This skill (templates) | Markdown |
+| Short-form video (30-60s) | short-form-video-ai | MP4 with captions |
+| AI short film (30s) | ai-film-maker | MP4 with narration + music |
+| Static images | blog-image-gen | PNG via Gemini Imagen |
+
+### Video Production Quick Reference
+
+**Short-form video (Reels/Shorts/TikTok):**
+```bash
+# 1. Create script.json with narration text + scene descriptions
+# 2. Generate via short-form-video-ai skill:
+#    - 6 AI images (Gemini Imagen 4, 9:16)
+#    - Image-to-video (Fal.ai Kling, 5s/scene)
+#    - TTS narration (Deepgram, female voice)
+#    - Word-synced captions (cyan highlight, 70px)
+#    - Background music (Fal.ai Lyria2)
+```
+
+**AI short film (cinematic 30s):**
+```bash
+# 1. Provide concept or seed image
+# 2. ai-film-maker handles:
+#    - Story development (5 scenes)
+#    - Image generation (Fal.ai / Google / Together)
+#    - Video generation (Fal.ai Kling)
+#    - Narration + music
+#    - Final composition
+```
+
+---
+
+## DEFAULT ACTION: Self-Improvement Loop
+
+When `/social-content-engine` is invoked without flags, run the **Self-Improvement Loop** (not the full pipeline). To run the full pipeline, use `/social-content-engine --full-pipeline`.
+
+To run automatically 3x daily:
+```
+/loop 8h /social-content-engine
+```
+
+---
+
+## Self-Improvement Loop (7 Steps)
+
+### Step 1: GATHER — Read All Strategy Data
+
+Read these files to understand current state:
+
+```
+# Analytics data (from social-analytics skill — run /social-analytics first if stale)
+data/social-analytics/viral-growth-strategy.md     # Platform KPIs, recommendations, what's working/not
+data/social-analytics/business-thesis.md           # Growth thesis, 30-day targets, revenue pipeline
+data/social-analytics/aggregated/followers.json    # Follower time-series (source of truth)
+data/social-analytics/aggregated/all-metrics.json  # All engagement metrics history
+
+# Strategy & content files
+content/strategy/content-thesis.md                 # Current viral growth thesis & principles
+content/strategy/content-grades.md                 # Grade history & trends
+content/strategy/posting-log.md                    # Recent posts & engagement data
+content/strategy/twitter-viral-strategy.md         # X/Twitter style guide
+social-engine-guide.md                             # Business model & niche definition
+content/strategy/viral-growth-week1/strategy.md    # Campaign strategy (if exists)
+```
+
+Also check for recent analytics output and previous trend scouting:
+```
+data/social-analytics/reports/                     # Daily analytics reports (markdown + PDF)
+content/strategy/trend-research/                   # Scouted trends (proposed topics)
+```
+
+**Trend research folder** (`content/strategy/trend-research/`):
+- Each file is `YYYY-MM-DD-trends.md` with scored topics
+- Statuses: PROPOSED → SELECTED → RESEARCHED → PUBLISHED
+- Always save new trend scouts here before proceeding
+
+### Step 2: GRADE — Score Recent Content
+
+For each post in `posting-log.md` from the last 7 days that hasn't been graded yet:
+
+**Grade on 7 dimensions (1-10 scale):**
+
+| Dimension | Weight | What to Evaluate |
+|-----------|--------|-----------------|
+| Hook Quality | 25% | Does the first line stop the scroll? Is it specific? Does it create curiosity? |
+| Emotional Resonance | 20% | Does it trigger one clear emotion (WTF, OHHHH, WOW, FINALLY, YAYY, LOL)? |
+| Specificity | 15% | Uses concrete numbers, names, examples? Not vague generalizations? |
+| Shareability | 15% | Would someone share this to look smart/helpful/in-the-know? |
+| Brand Alignment | 10% | Sounds like Augmi's voice? Builder-to-builder? Not corporate? |
+| Trend Relevance | 10% | Attached to current conversations? Riding a wave? |
+| Visual Impact | 5% | Image/video stops the scroll and reinforces the message? |
+
+**Calculate weighted grade:**
+```
+Overall = (Hook × 0.25) + (Emotion × 0.20) + (Specificity × 0.15) +
+          (Shareability × 0.15) + (Brand × 0.10) + (Trends × 0.10) + (Visual × 0.05)
+```
+
+**Letter grade:** A (9-10), B (7-8), C (5-6), D (3-4), F (1-2)
+
+**Cross-reference with actual engagement metrics** from `social-growth-strategy.md`:
+- Does high-graded content actually get high engagement?
+- Does low-graded content get low engagement?
+- Any surprises? (Low grade but high engagement = we're wrong about what works)
+
+**Update `content/strategy/content-grades.md`** with new grades and update rolling averages.
+
+### Step 3: ANALYZE — Find Patterns
+
+Analyze the data to find actionable patterns:
+
+1. **Top performers**: Which posts got the most engagement? What do they have in common?
+   - Topic? Format? Emotion? Time of day? Platform?
+
+2. **Bottom performers**: Which posts flopped? What patterns emerge?
+   - Too generic? Wrong emotion? Bad timing? Weak hook?
+
+3. **Grade-to-performance correlation**:
+   - Are our grades predictive of engagement? If not, our grading rubric needs adjustment.
+
+4. **Content gaps**:
+   - Topics we haven't covered that our audience cares about
+   - Formats we haven't tried (e.g., polls, memes, threads vs single posts)
+   - Platforms where we're underperforming
+
+5. **Thesis validation**:
+   - Is our core thesis in `content-thesis.md` holding up?
+   - Which principles are confirmed by data? Which are contradicted?
+
+### Step 4: SCOUT — Research New Viral Trends
+
+Search for new trends we can jump on:
+
+1. **Run trend research:**
+   - Use WebSearch: `"trending AI agents" OR "trending AI news" OR "viral tech" site:twitter.com OR site:reddit.com`
+   - Use WebSearch: `"trending crypto" OR "Web3 viral" OR "AI agents news today"`
+   - Use WebSearch: `"OpenClaw" OR "Claude Code" OR "AI agent deployment" trending`
+
+2. **Evaluate each trend:**
+   - Is it still rising or already peaked?
+   - Can we add a unique Augmi angle?
+   - Does it align with our content thesis?
+   - Estimated window: how many hours/days until it's old news?
+
+3. **Save results to `content/strategy/trend-research/YYYY-MM-DD-trends.md`:**
+   - Score each trend: Virality (1-10), Relevance (1-10), Combined = (V × 0.6) + (R × 0.4)
+   - Include: window (hours/days), emotion, Augmi angle, suggested format
+   - Mark status: PROPOSED
+   - Top 3 recommended for immediate content
+
+4. **Update `content/strategy/content-thesis.md` Trend Radar:**
+   - Add new trends under "Trends We're Currently Riding"
+   - Move expired trends to "Expired Trends"
+   - Add promising trends to "Trends to Watch"
+
+### Step 5: PROPOSE — Generate Improvement Proposal
+
+Based on Steps 2-4, write a specific improvement proposal. Save to:
+```
+OUTPUT/self-improvement/YYYYMMDD-HHMM/improvement-proposal.md
+```
+
+Format:
+```markdown
+# Self-Improvement Proposal — YYYY-MM-DD HH:MM
+
+## Current Performance Summary
+- Overall grade average: X.X (last 7 days)
+- Top performing content: [description]
+- Biggest gap: [description]
+- Grade trend: improving/declining/flat
+
+## Proposed Changes
+
+### 1. Content Thesis Updates
+- **Change**: [specific change to content-thesis.md]
+- **Why**: [data-backed reason]
+- **Expected Impact**: [what we expect to improve]
+
+### 2. Style Guide Updates
+- **Change**: [specific change to twitter-viral-strategy.md or social-engine-guide.md]
+- **Why**: [data-backed reason]
+- **Expected Impact**: [what we expect to improve]
+
+### 3. Strategy Updates
+- **Change**: [specific change to social-growth-strategy.md]
+- **Why**: [data-backed reason]
+- **Expected Impact**: [what we expect to improve]
+
+### 4. Trend Opportunities
+- **Trend**: [trend to jump on]
+- **Window**: [how long we have]
+- **Angle**: [our unique take]
+- **Format**: [suggested content format]
+
+## Risk Assessment
+- What could go wrong with these changes?
+- What are we uncertain about?
+```
+
+### Step 6: APPLY — Implement Improvements
+
+Apply the proposed changes to the strategy files:
+
+1. **Update `content/strategy/content-thesis.md`:**
+   - Refine core thesis if data contradicts it
+   - Update viral growth principles based on what's working
+   - Update platform-specific thesis with engagement data
+   - Move hypotheses between Active/Validated/Invalidated
+   - Add to refinement history table
+   - Increment refinement count and update timestamp
+
+2. **Update `content/strategy/twitter-viral-strategy.md`:**
+   - Add new hook templates that performed well
+   - Remove hook patterns that consistently underperform
+   - Update emotion targeting based on engagement data
+   - Add new narrative frames based on top performers
+
+3. **Update `social-engine-guide.md`:**
+   - Adjust audience profile if we're reaching different segments
+   - Update content quality standards based on what drives engagement
+   - Refine analytics targets based on realistic benchmarks
+
+4. **Update `social-growth-strategy.md`:**
+   - Update KPI targets based on actual data
+   - Add new recommendations
+   - Update content themes performing well
+
+5. **Log all changes:**
+   Save to `OUTPUT/self-improvement/YYYYMMDD-HHMM/changes-applied.md`:
+   ```markdown
+   # Changes Applied — YYYY-MM-DD HH:MM
+
+   ## Files Modified
+   1. content/strategy/content-thesis.md — [what changed]
+   2. content/strategy/twitter-viral-strategy.md — [what changed]
+   3. social-engine-guide.md — [what changed]
+   4. social-growth-strategy.md — [what changed]
+
+   ## Refinement Number: X
+   ## Previous Grade Average: X.X
+   ## Target Grade Average: X.X
+   ```
+
+### Step 7: REPORT — Print Summary
+
+Print a concise summary:
+
+```
+=== Self-Improvement Loop Complete ===
+
+Date: YYYY-MM-DD HH:MM
+Refinement #: X
+
+Content Graded: X posts
+Average Grade: X.X (A/B/C/D/F)
+Grade Trend: improving/declining/flat (vs last cycle)
+
+Changes Applied:
+  - Content thesis: [brief description]
+  - Style guide: [brief description]
+  - Strategy: [brief description]
+
+Trend Opportunities Found: X
+  - [trend 1] (window: Xh)
+  - [trend 2] (window: Xh)
+
+Proposal: OUTPUT/self-improvement/YYYYMMDD-HHMM/improvement-proposal.md
+Changes: OUTPUT/self-improvement/YYYYMMDD-HHMM/changes-applied.md
+
+Next cycle: ~8 hours
+===
+```
+
+---
+---
+
+# FULL CONTENT PIPELINE (use --full-pipeline flag)
+
+The original trend-to-content pipeline. Run with `/social-content-engine --full-pipeline`.
 
 Automates the full trend-to-content pipeline: discover trending topics, score them, research the best ones, write platform-adapted content, generate images, and save to Google Drive.
 
