@@ -1,571 +1,313 @@
-# Social Engine - Complete Initialization Guide
+# Social Engine - Initialization Guide
 
-This guide walks you through setting up the social-engine system from scratch.
+**Version**: 2.0
+**Date**: 2026-03-15
+**Estimated Time**: 15-30 minutes
 
-## Quick Overview
+Everything the social engine needs — paths, API keys, platform IDs, schedules — lives in a single config file:
 
-The initialization process will:
-1. Define your niche and content strategy
-2. Create all required directories
-3. Generate style guides for each content type
-4. Configure API keys and credentials
-5. Set up daily cron job for analytics
-6. Verify everything works
-7. Launch your first content cycle
+```
+.claude/skills/social-content-engine/config.json
+```
 
-**Time Required**: 30-45 minutes
-**Difficulty**: Beginner-friendly (interactive setup)
+Running `/social-content-engine init` collects all required information and writes it there. Once the config exists, every skill reads from it automatically.
 
 ---
 
-## Prerequisites
+## Config-First Approach
 
-Before you start, make sure you have:
+Instead of scattered markdown files with hardcoded paths, one JSON config drives the entire system:
 
-- ✅ Postiz account (for scheduling) - [postiz.com](https://postiz.com)
-- ✅ Google Cloud account with Gemini API enabled
-- ✅ Anthropic API key (for Claude)
-- ✅ `.env.local` file in project root (or ready to create)
-
-### Getting API Keys
-
-**Postiz API Key**:
-1. Log in to [postiz.com](https://postiz.com)
-2. Go to Settings → API
-3. Create new API token
-4. Copy to clipboard
-
-**Gemini API Key**:
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create project or select existing
-3. Enable Gemini API
-4. Create API key (Credentials → Create Credentials → API Key)
-5. Copy to clipboard
-
-**Anthropic API Key**:
-1. Go to [Anthropic Dashboard](https://console.anthropic.com)
-2. Go to API Keys
-3. Create new key or use existing
-4. Copy to clipboard
+- Skills read paths from config (no hardcoded locations)
+- Platform IDs live in config (easy to swap accounts)
+- Automation tier is set in config (manual, semi-auto, or full-auto)
+- Init validates everything before writing
 
 ---
 
-## Step 1: Start Initialization
-
-### Option A: Interactive Setup (Recommended)
-```bash
-/social-engine init
-```
-
-This launches an interactive questionnaire that guides you through setup.
-
-### Option B: Manual Setup
-Follow the steps below manually.
-
----
-
-## Step 2: Define Your Niche (Interactive or Manual)
-
-### Interactive
-The system will ask:
-- What's your primary niche?
-- What are 3-5 subtopics?
-- Which platforms do you use? (Instagram, X, LinkedIn, YouTube)
-- What's your target audience?
-- How often do you want to post?
-
-### Manual
-Edit `social-engine-guide.md`:
-
-```markdown
-# Social Engine Guide
-
-## Niche Definition
-**Primary Niche**: AI Agents, OpenClaw, Claude Code
-**Subtopics**:
-- AI agent deployment and architecture
-- OpenClaw framework features
-- Claude Code integration
-- Agent automation workflows
-- Crypto-native AI agents
-- Agent monetization
-
-## Target Platforms
-- Instagram (carousel + Reels)
-- X/Twitter (threads + videos)
-- LinkedIn (articles + images)
-- YouTube (shorts)
-
-## Audience Profile
-- Developers building AI agents
-- Crypto/Web3 founders
-- Technical CTOs
-- AI enthusiast communities
-
-## Content Quality Standards
-- Humanization Required: Yes (always `/humanizer`)
-- Engagement Focus: Educational + actionable
-- Posting Frequency: 3-5 posts/week
-- Brand Voice: Authentic, enthusiastic, educational
-```
-
----
-
-## Step 3: Create Directory Structure (Automatic or Manual)
-
-### Interactive
-System creates all directories automatically.
-
-### Manual
-Create this structure in your project root:
-
-```bash
-mkdir -p content/strategy
-mkdir -p content/style-guides
-mkdir -p content/research
-mkdir -p OUTPUT/social-analytics
-mkdir -p OUTPUT/social-research
-mkdir -p app/api/cron/social-analytics
-```
-
----
-
-## Step 4: Configure API Keys
-
-### In `.env.local` (Project Root)
-
-Add these environment variables:
-
-```bash
-# Postiz (Social media scheduling)
-POSTIZ_API_KEY=pk_live_xxxxxxxxxxxxx
-
-# Google/Gemini (Image generation)
-GEMINI_API_KEY=AIza_xxxxxxxxxxxxxxxxxxxx
-
-# Anthropic (AI text generation)
-ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxx
-
-# Cron Security
-CRON_SECRET=your_secret_key_here_min_32_chars
-
-# Optional: Analytics Email
-ANALYTICS_EMAIL=your-email@example.com
-
-# Optional: Custom Cron Time (default 07:00 UTC)
-ANALYTICS_CRON_TIME=07:00
-```
-
-**Never commit `.env.local` to git!**
-
----
-
-## Step 5: Generate Style Guides
-
-### Interactive
-System asks about your brand and auto-generates guides.
-
-### Manual
-Copy templates to `content/style-guides/`:
-
-```bash
-cp templates/carousel-guide-template.md content/style-guides/carousel-guide.md
-cp templates/blog-guide-template.md content/style-guides/blog-guide.md
-cp templates/linkedin-twitter-video-guides.md content/style-guides/linkedin-twitter-video-guides.md
-```
-
-### Customize Each Guide
-
-Edit each file to match your brand:
-
-**carousel-guide.md**:
-- Update color palette
-- Set your fonts
-- Adjust visual style (sci-fi, minimalist, etc.)
-
-**blog-guide.md**:
-- Add your primary brand color
-- Set typography
-- Update visual aesthetic
-
-**linkedin-twitter-video-guides.md**:
-- Professional brand guidelines
-- Video requirements
-- Platform-specific rules
-
----
-
-## Step 6: Create Strategy File
-
-### Initialize `social-growth-strategy.md`
-
-Create with initial values:
-
-```markdown
-# Social Growth Strategy
-
-**Last Updated**: [Today's date]
-**Baseline Status**: Initial Setup
-
-## Current Period Metrics
-
-| Metric | Target | Current | Trend |
-|--------|--------|---------|-------|
-| Instagram Engagement | >3% | TBD | — |
-| X Engagement | >2% | TBD | — |
-| LinkedIn CTR | >1.5% | TBD | — |
-| YouTube Completion | >70% | TBD | — |
-| Monthly Follower Growth | 5-10% | TBD | — |
-
-## Content Performance Analysis
-
-### By Platform
-
-#### Instagram
-- Best Time: TBD
-- High Engagement Topics: TBD
-- Audience Size: TBD
-
-#### X/Twitter
-- Best Time: TBD
-- High Engagement Topics: TBD
-
-#### LinkedIn
-- Best Time: TBD
-- Professional Audience: TBD
-
-#### YouTube
-- Completion Rate: TBD
-- Subscriber Conversion: TBD
-
-## Growth Recommendations
-
-[Will be updated daily at 7 AM UTC]
-
-## Topics to Explore
-
-[Will be populated by viral-research]
-
-## Notes
-
-Initial setup completed [date].
-```
-
----
-
-## Step 7: Create Posting Log
-
-### Initialize `content/strategy/posting-log.md`
-
-```markdown
-# Posting Log
-
-Tracks all scheduled posts with metrics.
-
-## Schedule
-
-| Date | Platform | Content Type | Topic | Post ID | Engagement | Notes |
-|------|----------|--------------|-------|---------|------------|-------|
-| TBD | Instagram | Carousel | [Topic] | TBD | TBD | First post |
-
-## Performance Summary
-
-- Total Posts: 0
-- Average Engagement: 0%
-- Best Performer: None yet
-- Trending Topics: TBD
-```
-
----
-
-## Step 8: Set Up Daily Cron Job
-
-### Option A: External Cron Service (EasyCron or cron-job.org)
-
-**Recommended for beginners**
-
-1. Go to [easycron.com](https://easycron.com) or [cron-job.org](https://cron-job.org)
-2. Create account (free)
-3. Create new cron job with:
-   - **URL**: `https://augmi.world/api/cron/social-analytics`
-   - **Method**: POST
-   - **Headers**: `Authorization: Bearer {CRON_SECRET}`
-   - **Schedule**: Every day at 07:00 UTC
-   - **Timezone**: UTC
-
-4. Test the cron job
-5. Verify it runs daily
-
-### Option B: Fly.io Built-in Cron
-
-**If hosting on Fly.io**
-
-Add to `fly.toml`:
-
-```toml
-[http_service]
-processes = ["app"]
-
-# Add cron handler
-[[http_service.checks]]
-grace_period = "5s"
-interval = "10s"
-timeout = "5s"
-
-# Cron job for social analytics
-[[services]]
-internal_port = 3000
-protocol = "tcp"
-
-[[services.ports]]
-port = 80
-handlers = ["http"]
-
-[[services.ports]]
-port = 443
-handlers = ["tls", "http"]
-
-# Schedule cron
-[env]
-CRON_ENABLED = "true"
-CRON_SCHEDULE = "0 7 * * *"  # 7 AM UTC daily
-```
-
-Then deploy:
-```bash
-fly deploy
-```
-
-### Option C: Local Testing (Development Only)
-
-Test locally before deploying:
-
-```bash
-# Set CRON_SECRET
-export CRON_SECRET="your_secret_key"
-
-# Test the endpoint
-curl -X POST http://localhost:3000/api/cron/social-analytics \
-  -H "Authorization: Bearer $CRON_SECRET"
-```
-
----
-
-## Step 9: Configure Postiz Integration IDs
-
-### Get Your Integration IDs
-
-1. Log in to [postiz.com](https://postiz.com)
+## Step 1: Gather Required Information
+
+Collect this before running init.
+
+### Brand Info
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `brand.name` | Project or brand name | "Acme AI" |
+| `brand.domain` | Primary domain | "acme.ai" |
+| `brand.handles.twitter` | Twitter/X handle | "@acmeai" |
+| `brand.handles.instagram` | Instagram handle | "@acmeai" |
+| `brand.handles.tiktok` | TikTok handle | "@acmeai" |
+| `brand.handles.youtube` | YouTube channel handle | "@acmeai" |
+| `brand.handles.linkedin` | LinkedIn company slug | "acme-ai" |
+
+### Niche
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `niche.keywords` | 3-5 primary niche keywords | ["AI agents", "automation", "no-code"] |
+| `niche.subtopics` | 3-5 content subtopics | ["agent deployment", "LLM workflows", "AI tools"] |
+| `niche.audience` | Target audience description | "indie hackers and founders building with AI" |
+
+### File Paths: Strategy and Style Guides
+
+These files define your content identity and rules. Provide the path relative to your project root.
+
+| Config Key | Purpose | Typical Path |
+|------------|---------|--------------|
+| `paths.contentThesis` | Viral principles, what makes content shareable | `content/strategy/content-thesis.md` |
+| `paths.styleGuide` | Hook templates, emotion targeting, brand voice | `content/strategy/content-style-guide.md` |
+| `paths.contentGrades` | Quality scoring history, A/B test results | `content/strategy/content-grades.md` |
+| `paths.postingLog` | Post history with engagement data | `content/strategy/posting-log.md` |
+| `paths.postingSchedule` | When to post per platform | `content/strategy/posting-schedule.md` |
+| `paths.conversionPlaybook` | Follower-to-customer conversion tactics | `content/strategy/follower-conversion-playbook.md` |
+| `paths.analyticsStrategy` | KPIs, growth recommendations (updated daily) | `data/social-analytics/viral-growth-strategy.md` |
+| `paths.businessThesis` | Growth thesis, revenue pipeline | `content/strategy/business-thesis.md` |
+| `paths.brandFoundation` | Mission, value prop, brand pillars | `docs/brand/` |
+| `paths.trendResearch` | Trend research directory | `content/research/` |
+
+### File Paths: Data and Output
+
+| Config Key | Purpose | Typical Path |
+|------------|---------|--------------|
+| `paths.analyticsData` | Aggregated metrics, raw data, reports | `data/social-analytics/` |
+| `paths.contentOutput` | Generated content (images, videos, copy) | `OUTPUT/` |
+| `paths.selfImprovementOutput` | Self-improvement loop results | `OUTPUT/self-improvement/` |
+| `paths.templates` | Reusable templates directory | `content/templates/` |
+
+### API Keys
+
+Store these in your `.env.local` file. Never commit them.
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `POSTIZ_API_KEY` | Required | Scheduling and publishing posts |
+| `GEMINI_API_KEY` | Required | Image generation |
+| `ANTHROPIC_API_KEY` | Required | Content generation (Claude) |
+| `CRON_SECRET` | Required | Authenticating cron job endpoints (min 32 chars) |
+| `TWITTERAPI_IO_KEY` | Optional | Enhanced Twitter analytics |
+| `FAL_KEY` | Optional | Video generation via fal.ai |
+| `DEEPGRAM_API_KEY` | Optional | Voice synthesis for video |
+
+### Platform Config
+
+| Config Key | Description | Example |
+|------------|-------------|---------|
+| `platforms.twitter.enabled` | Enable Twitter/X | `true` |
+| `platforms.twitter.defaultFormat` | Default content format | `"thread"` |
+| `platforms.twitter.postsPerWeek` | Posting frequency | `5` |
+| `platforms.twitter.postizId` | Postiz integration ID | `"cmlrob0gp05g7mn0yncmwzg7c"` |
+| `platforms.instagram.enabled` | Enable Instagram | `true` |
+| `platforms.instagram.defaultFormat` | Default format | `"carousel"` |
+| `platforms.instagram.postsPerWeek` | Posting frequency | `3` |
+| `platforms.instagram.postizId` | Postiz integration ID | `"cmlre90pk04d9mn0yosyhnx4o"` |
+| `platforms.linkedin.enabled` | Enable LinkedIn | `true` |
+| `platforms.linkedin.defaultFormat` | Default format | `"image"` |
+| `platforms.linkedin.postsPerWeek` | Posting frequency | `3` |
+| `platforms.linkedin.postizId` | Postiz integration ID | `"cmlrecv0r04dimn0yl34lxmzx"` |
+| `platforms.youtube.enabled` | Enable YouTube | `false` |
+| `platforms.youtube.defaultFormat` | Default format | `"short"` |
+| `platforms.youtube.postsPerWeek` | Posting frequency | `2` |
+| `platforms.youtube.postizId` | Postiz integration ID | `"cmlreb5vl04dcmn0yu3ej283a"` |
+
+**Getting Postiz integration IDs:**
+1. Log in at [postiz.com](https://postiz.com)
 2. Go to Integrations
-3. Note the integration IDs for:
-   - Instagram: `cmlre90pk04d9mn0yosyhnx4o` (example)
-   - X: `cmlrob0gp05g7mn0yncmwzg7c` (example)
-   - LinkedIn: `cmlrecv0r04dimn0yl34lxmzx` (example)
-   - YouTube: `cmlreb5vl04dcmn0yu3ej283a` (example)
+3. Copy the ID for each connected platform
 
-### Update in Skills
+### Cron Jobs
 
-These IDs should be in the `social-engine` and related skills. Update in:
-- `app/api/cron/social-analytics/route.ts`
-- `.claude/skills/social-engine/SKILL.md` (for documentation)
+| Config Key | Description | Example |
+|------------|-------------|---------|
+| `cron.analyticsSchedule` | When daily analytics runs (cron expression) | `"0 7 * * *"` (7 AM UTC) |
+| `cron.analyticsEndpoint` | Full URL for analytics cron | `"https://yourdomain.com/api/cron/social-analytics"` |
+| `cron.selfImprovementFrequency` | How often self-improvement loop runs | `"3x-daily"` |
+| `cron.automationTier` | Automation level (see below) | `"semi-auto"` |
+
+---
+
+## Step 2: Run Init
 
 ```bash
-# Check current values
-grep "integration" app/api/cron/social-analytics/route.ts
+/social-content-engine init
+```
+
+The init process will:
+1. Ask for each piece of information listed above
+2. Validate that required paths exist (or offer to create them)
+3. Verify API keys are present in the environment
+4. Write `.claude/skills/social-content-engine/config.json`
+5. Run a verification pass and report any issues
+
+---
+
+## Step 3: Choose Your Automation Tier
+
+Set `cron.automationTier` in config to one of:
+
+### Manual
+- User runs each command individually
+- No cron jobs required
+- Full control over every step
+- Best for: getting started, low-volume accounts
+
+```
+/viral-research → select topics → /deep-research → /social-engine → review → /postiz
+```
+
+### Semi-Auto (Recommended)
+- Daily analytics cron runs automatically at configured time
+- Content creation is user-initiated
+- User approves all content before posting
+- Best for: active creators who want data without full automation
+
+Cron required: `analyticsEndpoint` hit daily via external cron service.
+
+### Full-Auto
+- Daily analytics cron runs automatically
+- Self-improvement loop runs 3x daily, refining strategy
+- Content pipeline runs on schedule
+- User still approves before posts go live (final gate)
+- Best for: established accounts with proven content strategy
+
+Cron required: analytics endpoint + self-improvement endpoint.
+
+---
+
+## Step 4: Verify
+
+After init completes, run:
+
+```bash
+/social-content-engine verify
+```
+
+Verification checks:
+- Config file exists and is valid JSON
+- All required paths are defined
+- Required API keys present in environment
+- Postiz integration IDs are non-empty for enabled platforms
+- Cron endpoint URL is reachable (if configured)
+- Strategy and style guide files exist at configured paths
+
+---
+
+## Example config.json
+
+This is a generic example. Replace all values with your own.
+
+```json
+{
+  "version": "2.0",
+  "brand": {
+    "name": "Acme AI",
+    "domain": "acme.ai",
+    "handles": {
+      "twitter": "@acmeai",
+      "instagram": "@acmeai",
+      "tiktok": "@acmeai",
+      "youtube": "@acmeai",
+      "linkedin": "acme-ai"
+    }
+  },
+  "niche": {
+    "keywords": ["AI agents", "automation", "no-code tools"],
+    "subtopics": [
+      "agent deployment",
+      "LLM workflows",
+      "AI productivity",
+      "no-code automation",
+      "indie hacking with AI"
+    ],
+    "audience": "indie hackers and founders building with AI"
+  },
+  "paths": {
+    "contentThesis": "content/strategy/content-thesis.md",
+    "styleGuide": "content/strategy/content-style-guide.md",
+    "contentGrades": "content/strategy/content-grades.md",
+    "postingLog": "content/strategy/posting-log.md",
+    "postingSchedule": "content/strategy/posting-schedule.md",
+    "conversionPlaybook": "content/strategy/follower-conversion-playbook.md",
+    "analyticsStrategy": "data/social-analytics/viral-growth-strategy.md",
+    "businessThesis": "content/strategy/business-thesis.md",
+    "brandFoundation": "docs/brand/",
+    "trendResearch": "content/research/",
+    "analyticsData": "data/social-analytics/",
+    "contentOutput": "OUTPUT/",
+    "selfImprovementOutput": "OUTPUT/self-improvement/",
+    "templates": "content/templates/"
+  },
+  "platforms": {
+    "twitter": {
+      "enabled": true,
+      "defaultFormat": "thread",
+      "postsPerWeek": 5,
+      "postizId": ""
+    },
+    "instagram": {
+      "enabled": true,
+      "defaultFormat": "carousel",
+      "postsPerWeek": 3,
+      "postizId": ""
+    },
+    "linkedin": {
+      "enabled": true,
+      "defaultFormat": "image",
+      "postsPerWeek": 3,
+      "postizId": ""
+    },
+    "youtube": {
+      "enabled": false,
+      "defaultFormat": "short",
+      "postsPerWeek": 2,
+      "postizId": ""
+    },
+    "tiktok": {
+      "enabled": false,
+      "defaultFormat": "short",
+      "postsPerWeek": 3,
+      "postizId": ""
+    }
+  },
+  "cron": {
+    "analyticsSchedule": "0 7 * * *",
+    "analyticsEndpoint": "https://yourdomain.com/api/cron/social-analytics",
+    "selfImprovementFrequency": "3x-daily",
+    "automationTier": "semi-auto"
+  }
+}
 ```
 
 ---
 
-## Step 10: Verify Installation
+## Troubleshooting Init
 
-### Run Verification
-```bash
-/social-engine verify
-```
+**"Config path not found"**
+The init process can create missing directories. Answer `yes` when prompted, or create them manually before running init.
 
-This checks:
-- ✅ All directories exist
-- ✅ All style guides present
-- ✅ API keys configured
-- ✅ Cron job accessible
-- ✅ All skills available
+**"API key not found in environment"**
+Add the key to `.env.local` in your project root, then re-run init. Never commit `.env.local`.
 
-### Manual Verification
+**"Postiz integration ID is empty"**
+Log in to [postiz.com](https://postiz.com), connect your social accounts, then copy the integration IDs from the Integrations page.
 
-Check each component:
-
-```bash
-# Check directories
-ls -la content/strategy/
-ls -la content/style-guides/
-ls -la OUTPUT/
-
-# Check files
-cat social-engine-guide.md
-cat social-growth-strategy.md
-cat content/strategy/posting-log.md
-
-# Check API keys (NEVER output these!)
-echo $POSTIZ_API_KEY  # Should show value (redacted)
-echo $GEMINI_API_KEY  # Should show value (redacted)
-
-# Test cron endpoint
-curl -X POST http://localhost:3000/api/cron/social-analytics \
-  -H "Authorization: Bearer $CRON_SECRET"
-```
+**"Cron endpoint unreachable"**
+This is a warning, not a blocker. The endpoint won't exist until you deploy. Skip verification on that check for now.
 
 ---
 
-## Step 11: Launch First Cycle
+## After Init
 
-### Ready? Start with Trend Discovery
+Start with trend discovery:
 
 ```bash
 /viral-research
 ```
 
-This will:
-1. Search for trending topics in your niche
-2. Return top 10 with scores
-3. Ask you to select topics
-
-### Then Run Full Pipeline
+Then run the full pipeline:
 
 ```bash
-/social-engine
+/social-content-engine
 ```
 
-Follow the interactive prompts to:
-1. View trending topics
-2. Select topics to research
-3. Review research
-4. Create content (images, videos, carousels)
-5. Humanize text
-6. Schedule posts
-7. Monitor daily analytics
-
----
-
-## Configuration Checklist
-
-Before declaring success, verify:
-
-- ☐ `social-engine-guide.md` created and customized
-- ☐ `social-growth-strategy.md` initialized
-- ☐ `content/strategy/posting-log.md` created
-- ☐ All style guides created in `content/style-guides/`
-- ☐ `.env.local` has all API keys
-- ☐ Cron job scheduled (external or Fly.io)
-- ☐ Postiz integration IDs configured
-- ☐ `/social-engine verify` passes all checks
-- ☐ First `/viral-research` runs successfully
-- ☐ Can access `/api/cron/social-analytics` endpoint
-
----
-
-## Troubleshooting Setup
-
-### "POSTIZ_API_KEY not found"
-**Solution**:
-1. Generate API key in Postiz dashboard
-2. Add to `.env.local`
-3. Reload shell: `source ~/.zshrc` (or bash profile)
-4. Test: `echo $POSTIZ_API_KEY`
-
-### "Cron job failed to initialize"
-**Solution**:
-1. Verify CRON_SECRET is at least 32 characters
-2. Check external cron service setup
-3. Test endpoint manually with curl
-4. Check firewall/network access
-
-### "Style guides not generating"
-**Solution**:
-1. Copy template files manually
-2. Edit to customize for your brand
-3. Verify files in `content/style-guides/`
-
-### "API keys not working"
-**Solution**:
-1. Verify keys are correct (check provider dashboard)
-2. Check for trailing whitespace in `.env.local`
-3. Verify APIs are enabled (Gemini, etc.)
-4. Check API quotas/limits
-
-### "Viral-research returns no results"
-**Solution**:
-1. Check internet connectivity
-2. Verify niche keywords are specific
-3. Check API rate limits (try again in 1 hour)
-4. Review error messages in logs
-
----
-
-## Next Steps After Init
-
-### Day 1
-1. Run `/viral-research` to find trends
-2. Select 2-3 topics
-3. Run `/social-engine` to create first posts
-
-### Day 2-7
-- Monitor content creation progress
-- Review images/videos before approval
-- Approve posts for scheduling
-
-### Day 8+
-- Check analytics daily at 7 AM
-- Review `social-growth-strategy.md` for insights
-- Adjust strategy based on recommendations
-- Run `/viral-research` again for next cycle
-
----
-
-## File Reference
-
-| File | Purpose | Location |
-|------|---------|----------|
-| social-engine-guide.md | Niche config | Root |
-| social-growth-strategy.md | KPI tracking | Root |
-| posting-log.md | Post history | content/strategy/ |
-| carousel-guide.md | Carousel style | content/style-guides/ |
-| blog-guide.md | Blog image style | content/style-guides/ |
-| linkedin-twitter-video-guides.md | Other platforms | content/style-guides/ |
-| Cron route | Daily analytics | app/api/cron/social-analytics/ |
-
----
-
-## Support
-
-**If something breaks**:
-1. Check error messages carefully
-2. Review SKILL.md files for details
-3. Run `/social-engine verify` to diagnose
-4. Check README.md troubleshooting section
-
-**For questions**:
-- Edit `social-engine-guide.md` to adjust niche
-- Review example outputs in `OUTPUT/`
-- Check daily strategy updates in `social-growth-strategy.md`
-
----
-
-## You're Ready! 🚀
-
-Your social engine is initialized and ready to run!
-
-```bash
-# Start trending topics discovery
-/viral-research
-
-# Or jump straight to full pipeline
-/social-engine
-```
-
-Happy creating! 🎨📱✨
-
----
-
-**Initialization Version**: 1.0
-**Last Updated**: 2026-03-06
-**Estimated Setup Time**: 30-45 minutes
+For detailed pipeline documentation, see `SKILL.md`.

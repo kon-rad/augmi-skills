@@ -1,0 +1,135 @@
+{
+  "version": "2.0",
+  "initialized_at": "2026-03-15",
+  "project_name": "Augmi",
+
+  "brand": {
+    "name": "Augmi",
+    "domain": "augmi.world",
+    "handles": {
+      "twitter": "@augmidotworld",
+      "instagram": "@augmiworld",
+      "tiktok": "@augmidotworld",
+      "youtube": "@augmiworld",
+      "linkedin_page": "Augmi.world",
+      "linkedin_personal": "Konrad Gnat"
+    }
+  },
+
+  "niche": {
+    "primary": "AI Agents, OpenClaw, Agent Hosting",
+    "subtopics": [
+      "AI agent deployment and infrastructure",
+      "OpenClaw framework and ecosystem",
+      "Crypto-native AI agents",
+      "Agent monetization and marketplace",
+      "One-click agent hosting"
+    ],
+    "audience": [
+      "Developers building AI agents",
+      "Solo founders needing automation",
+      "Content creators managing social presence",
+      "Researchers running deep research agents",
+      "Crypto/Web3 builders"
+    ]
+  },
+
+  "paths": {
+    "strategy": {
+      "content_thesis": "content/strategy/content-thesis.md",
+      "content_style_guide": "content/strategy/content-style-guide.md",
+      "content_grades": "content/strategy/content-grades.md",
+      "posting_log": "content/strategy/posting-log.md",
+      "posting_schedule": "content/strategy/posting-schedule.md",
+      "follower_playbook": "content/strategy/follower-conversion-playbook.md",
+      "trend_research_dir": "content/strategy/trend-research/",
+      "campaign_strategy": "content/strategy/viral-growth-week1/strategy.md"
+    },
+    "analytics": {
+      "viral_growth_strategy": "data/social-analytics/viral-growth-strategy.md",
+      "business_thesis": "data/social-analytics/business-thesis.md",
+      "aggregated_dir": "data/social-analytics/aggregated/",
+      "followers_json": "data/social-analytics/aggregated/followers.json",
+      "all_metrics_json": "data/social-analytics/aggregated/all-metrics.json",
+      "raw_data_dir": "data/social-analytics/raw/",
+      "reports_dir": "data/social-analytics/reports/"
+    },
+    "brand": {
+      "brand_foundation": "docs/brand/00-brand-foundation.md",
+      "mission": "docs/brand/01-mission-statement.md",
+      "value_proposition": "docs/brand/02-value-proposition.md",
+      "business_algorithm": "AUGMI_BUSINESS_ALGORITHM.md",
+      "soul": "docs/brand/Soul.md",
+      "quick_reference": "docs/brand/quick-reference.md"
+    },
+    "output": {
+      "content_output": "OUTPUT/social-content/",
+      "self_improvement": "OUTPUT/self-improvement/",
+      "trends_output": "OUTPUT/trends/",
+      "deep_research": "OUTPUT/deep-research/"
+    },
+    "skills": {
+      "social_content_engine": ".claude/skills/social-content-engine/",
+      "social_analytics": ".claude/skills/social-analytics/",
+      "analytics_style_guide": ".claude/skills/social-analytics/analytics-report-style-guide.md",
+      "analytics_config": ".claude/skills/social-analytics/config/integrations.json",
+      "templates_dir": ".claude/skills/social-content-engine/templates/"
+    }
+  },
+
+  "api_keys": {
+    "required": [
+      { "name": "POSTIZ_API_KEY", "purpose": "Social scheduling + analytics collection", "source": ".env.local" },
+      { "name": "GEMINI_API_KEY", "purpose": "Image generation (Imagen)", "source": ".env.local" },
+      { "name": "ANTHROPIC_API_KEY", "purpose": "AI text generation", "source": ".env.local" },
+      { "name": "CRON_SECRET", "purpose": "Cron job authentication", "source": ".env.local" }
+    ],
+    "optional": [
+      { "name": "TWITTERAPI_IO_KEY", "purpose": "Twitter/X analytics ($0.15/1K)", "source": ".env.local" },
+      { "name": "FAL_KEY", "purpose": "Video generation (Kling)", "source": ".env.local" },
+      { "name": "DEEPGRAM_API_KEY", "purpose": "Voice narration for videos", "source": ".env.local" }
+    ]
+  },
+
+  "cron_jobs": {
+    "daily_analytics": {
+      "schedule": "0 7 * * *",
+      "description": "Collect metrics from all platforms, generate daily report",
+      "endpoint": "/api/cron/social-analytics",
+      "auth": "Bearer $CRON_SECRET",
+      "enabled": true
+    },
+    "self_improvement_loop": {
+      "schedule": "every 8 hours via /loop 8h /social-content-engine",
+      "description": "Grade content, analyze performance, scout trends, refine strategy",
+      "method": "claude_loop",
+      "enabled": false,
+      "note": "Run manually: /loop 8h /social-content-engine"
+    },
+    "trend_research": {
+      "schedule": "daily manual or via self-improvement loop",
+      "description": "Scout viral trends, score, save to trend-research/",
+      "method": "included_in_self_improvement",
+      "enabled": true
+    }
+  },
+
+  "platforms": {
+    "instagram": { "enabled": true, "default_format": "carousel", "posting_frequency": "daily" },
+    "twitter": { "enabled": true, "default_format": "thread", "posting_frequency": "2x daily" },
+    "linkedin_page": { "enabled": true, "default_format": "carousel", "posting_frequency": "daily" },
+    "linkedin_personal": { "enabled": true, "default_format": "carousel", "posting_frequency": "daily" },
+    "youtube": { "enabled": true, "default_format": "short", "posting_frequency": "3x weekly" },
+    "tiktok": { "enabled": true, "default_format": "short", "posting_frequency": "daily" }
+  },
+
+  "content_standards": {
+    "always_humanize": true,
+    "humanizer_skill": "humanizer",
+    "require_user_approval_before_posting": true,
+    "default_carousel_slides": 6,
+    "default_video_length_seconds": 30,
+    "max_tweet_length": 280,
+    "linkedin_post_length": "150-300 words"
+  }
+}

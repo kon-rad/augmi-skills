@@ -87,6 +87,11 @@ INTER_REGULAR = FONT_DIR / "Inter-Regular.ttf"
 INTER_BOLD_URL = "https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYMZhrib2Bg-4.ttf"
 INTER_REGULAR_URL = "https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
 
+# Two-half layout constants
+TOP_HALF_HEIGHT = 675   # Text area (top 50%)
+BOTTOM_HALF_HEIGHT = 675  # Image area (bottom 50%)
+BOTTOM_IMAGE_SIZE = (SLIDE_WIDTH, BOTTOM_HALF_HEIGHT)
+
 
 def ensure_fonts():
     """Download Inter fonts if not present."""
@@ -324,6 +329,44 @@ def resize_and_crop(img: Image.Image, target_size: tuple[int, int]) -> Image.Ima
     return img
 
 
+def composite_bottom_image(base_img: Image.Image, blog_image_path: str) -> Image.Image:
+    """
+    Composite a blog image into the bottom half of a slide with gradient overlay.
+    The image is center-cropped (not stretched) to fill 1080x675px.
+    A gradient fades from 100% dark at top to 15% dark at bottom.
+    """
+    if not blog_image_path or not os.path.exists(blog_image_path):
+        return base_img
+
+    # Ensure base is RGBA
+    if base_img.mode != "RGBA":
+        base_img = base_img.convert("RGBA")
+
+    # Load and center-crop blog image to fill bottom half
+    blog_img = Image.open(blog_image_path).convert("RGBA")
+    blog_img = resize_and_crop(blog_img, BOTTOM_IMAGE_SIZE)
+
+    # Create gradient overlay for smooth blending (dark at top -> transparent at bottom)
+    gradient = Image.new("RGBA", BOTTOM_IMAGE_SIZE, (0, 0, 0, 0))
+    gradient_draw = ImageDraw.Draw(gradient)
+    for y in range(BOTTOM_HALF_HEIGHT):
+        # 100% opacity at top (y=0) -> 15% opacity at bottom (y=675)
+        progress = y / BOTTOM_HALF_HEIGHT
+        alpha = int(255 * (1.0 - progress * 0.85))  # 255 -> ~38
+        gradient_draw.line(
+            [(0, y), (SLIDE_WIDTH, y)],
+            fill=(BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], alpha),
+        )
+
+    # Apply gradient over blog image
+    blog_with_gradient = Image.alpha_composite(blog_img, gradient)
+
+    # Paste into bottom half of base image
+    base_img.paste(blog_with_gradient, (0, TOP_HALF_HEIGHT), blog_with_gradient)
+
+    return base_img
+
+
 def create_cover_slide(
     cover_image_path: str,
     title: str,
@@ -333,26 +376,13 @@ def create_cover_slide(
 ) -> Image.Image:
     """
     Create the cover slide (Slide 1).
-    Full-bleed cover image, gradient overlay, title + subtext, logo, optional swipe cue.
+    Two-half layout: text on top half (dark bg), cover image on bottom half with gradient.
     """
-    cover = Image.open(cover_image_path).convert("RGBA")
-    cover = resize_and_crop(cover, SLIDE_SIZE)
+    img = Image.new("RGBA", SLIDE_SIZE, (*BG_COLOR, 255))
+    draw = ImageDraw.Draw(img)
 
-    # Gradient overlay: transparent top -> dark bottom (starts at 45% for taller slide)
-    gradient = Image.new("RGBA", SLIDE_SIZE, (0, 0, 0, 0))
-    gradient_draw = ImageDraw.Draw(gradient)
-
-    gradient_start = int(SLIDE_HEIGHT * 0.45)
-    for y in range(gradient_start, SLIDE_HEIGHT):
-        progress = (y - gradient_start) / (SLIDE_HEIGHT - gradient_start)
-        alpha = int(230 * progress)
-        gradient_draw.line(
-            [(0, y), (SLIDE_WIDTH, y)],
-            fill=(BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], alpha),
-        )
-
-    cover = Image.alpha_composite(cover, gradient)
-    draw = ImageDraw.Draw(cover)
+    # Logo
+    paste_logo(img, draw, logo_path)
 
     title_font = load_font(bold=True, size=COVER_TITLE_SIZE)
     subtext_font = load_font(bold=False, size=COVER_SUBTEXT_SIZE)
@@ -370,9 +400,9 @@ def create_cover_slide(
     if subtext:
         total_height += line_height_subtext + 16
 
-    # Position text in bottom 40%
-    text_area_top = int(SLIDE_HEIGHT * 0.60)
-    text_area_bottom = SLIDE_HEIGHT - (LOGO_PADDING + 60 if show_swipe else PADDING)
+    # Position text centered in the top half (below logo)
+    text_area_top = LOGO_PADDING + LOGO_ICON_SIZE + 80
+    text_area_bottom = TOP_HALF_HEIGHT - 20
     y = text_area_top + (text_area_bottom - text_area_top - total_height) // 2
 
     for line in title_lines:
@@ -387,14 +417,34 @@ def create_cover_slide(
         x = (SLIDE_WIDTH - sw) // 2
         draw.text((x, y), subtext, fill=(255, 255, 255, 204), font=subtext_font)
 
-    # Swipe cue
+    # Composite cover image into bottom half with gradient
+    img = composite_bottom_image(img, cover_image_path)
+    draw = ImageDraw.Draw(img)
+
+    # Swipe cue (drawn after image composite so it's on top)
     if show_swipe:
         draw_swipe_cue(draw, SLIDE_WIDTH, SLIDE_HEIGHT)
 
-    # Logo
-    paste_logo(cover, draw, logo_path)
+    return img.convert("RGB")
 
-    return cover.convert("RGB")
+
+def content_area_top_half():
+    """Return (top, bottom) y coordinates for content within the top half only."""
+    top = LOGO_PADDING + LOGO_ICON_SIZE + 60
+    bottom = TOP_HALF_HEIGHT - 20
+    return top, bottom
+
+
+def safe_start_y(c_top: int, c_bottom: int, total_h: int) -> int:
+    """
+    Calculate the starting y position for content, clamped to stay within bounds.
+    Content is vertically centered when it fits, but never goes above c_top.
+    If content exceeds available space, it starts at c_top (caller should
+    reduce font sizes or truncate content before calling this).
+    """
+    available = c_bottom - c_top
+    y = c_top + (available - total_h) // 2
+    return max(c_top, y)
 
 
 def create_content_slide(
@@ -404,10 +454,11 @@ def create_content_slide(
     total_slides: int,
     logo_path: str,
     show_swipe: bool = False,
+    blog_image_path: str = None,
 ) -> Image.Image:
     """
     Create a content slide (headline + detail paragraph).
-    Dark background, accent line, left-aligned text.
+    Two-half layout: text on top, blog image on bottom with gradient.
     """
     img = Image.new("RGBA", SLIDE_SIZE, (*BG_COLOR, 255))
     draw = ImageDraw.Draw(img)
@@ -422,7 +473,7 @@ def create_content_slide(
     detail_font = load_font(bold=False, size=CONTENT_DETAIL_SIZE)
 
     max_text_width = SLIDE_WIDTH - (PADDING * 2)
-    c_top, c_bottom = content_area()
+    c_top, c_bottom = content_area_top_half()
 
     line_h_headline = int(CONTENT_HEADLINE_SIZE * 1.4)
     line_h_detail = int(CONTENT_DETAIL_SIZE * 1.7)
@@ -433,20 +484,27 @@ def create_content_slide(
     detail_lines = []
     if detail:
         all_detail_lines = wrap_text(detail, detail_font, max_text_width)
-        detail_lines = all_detail_lines[:6]
-        if len(all_detail_lines) > 6:
+        detail_lines = all_detail_lines[:5]
+        if len(all_detail_lines) > 5:
             detail_lines[-1] = detail_lines[-1].rstrip() + "..."
 
     # Calculate total content height
     headline_block = len(headline_lines) * line_h_headline
-    accent_block = ACCENT_LINE_HEIGHT + 40  # accent line + gap
+    accent_block = ACCENT_LINE_HEIGHT + 40
     detail_block = len(detail_lines) * line_h_detail if detail_lines else 0
     gap = 40 if detail_lines else 0
     total_h = headline_block + accent_block + gap + detail_block
 
-    # Vertically center
+    # Overflow protection: truncate detail lines if content exceeds available space
     available = c_bottom - c_top
-    y = c_top + (available - total_h) // 2
+    while total_h > available and len(detail_lines) > 1:
+        detail_lines.pop()
+        detail_lines[-1] = detail_lines[-1].rstrip() + "..."
+        detail_block = len(detail_lines) * line_h_detail
+        total_h = headline_block + accent_block + gap + detail_block
+
+    # Vertically center in top half, clamped to never go above c_top
+    y = safe_start_y(c_top, c_bottom, total_h)
 
     # Draw headline
     for line in headline_lines:
@@ -458,12 +516,18 @@ def create_content_slide(
     draw_accent_line(draw, PADDING, y)
     y += ACCENT_LINE_HEIGHT + 20
 
-    # Detail text
+    # Detail text (only draw lines that fit within bounds)
     if detail_lines:
         y += gap
         for line in detail_lines:
+            if y + line_h_detail > c_bottom:
+                break
             draw.text((PADDING, y), line, fill=ZINC_300, font=detail_font)
             y += line_h_detail
+
+    # Composite blog image into bottom half
+    img = composite_bottom_image(img, blog_image_path)
+    draw = ImageDraw.Draw(img)
 
     # Counter
     draw_slide_counter(draw, slide_num, total_slides)
@@ -481,9 +545,11 @@ def create_list_slide(
     slide_num: int,
     total_slides: int,
     logo_path: str,
+    blog_image_path: str = None,
 ) -> Image.Image:
     """
     Create a list slide with numbered circles + items.
+    Two-half layout: text on top, blog image on bottom with gradient.
     """
     img = Image.new("RGBA", SLIDE_SIZE, (*BG_COLOR, 255))
     draw = ImageDraw.Draw(img)
@@ -497,7 +563,7 @@ def create_list_slide(
 
     max_text_width = SLIDE_WIDTH - (PADDING * 2)
     item_text_width = max_text_width - NUMBER_CIRCLE_SIZE - 24  # circle + gap
-    c_top, c_bottom = content_area()
+    c_top, c_bottom = content_area_top_half()
 
     line_h_headline = int(CONTENT_HEADLINE_SIZE * 1.4)
     line_h_item = int(LIST_ITEM_SIZE * 1.5)
@@ -521,7 +587,23 @@ def create_list_slide(
 
     total_h = headline_block + accent_block + items_block
     available = c_bottom - c_top
-    y = c_top + (available - total_h) // 2
+
+    # Overflow protection: reduce item gap and truncate item lines if needed
+    while total_h > available and item_gap > 12:
+        item_gap = max(12, item_gap - 8)
+        items_block = sum(len(lines) * line_h_item for lines in wrapped_items)
+        items_block += (len(wrapped_items) - 1) * item_gap if wrapped_items else 0
+        total_h = headline_block + accent_block + items_block
+
+    # If still overflowing, truncate item lines to 2 max
+    if total_h > available:
+        wrapped_items = [lines[:2] for lines in wrapped_items]
+        items_block = sum(len(lines) * line_h_item for lines in wrapped_items)
+        items_block += (len(wrapped_items) - 1) * item_gap if wrapped_items else 0
+        total_h = headline_block + accent_block + items_block
+
+    # Vertically center, clamped to never go above c_top
+    y = safe_start_y(c_top, c_bottom, total_h)
 
     # Draw headline
     for line in headline_lines:
@@ -533,19 +615,26 @@ def create_list_slide(
     draw_accent_line(draw, PADDING, y)
     y += ACCENT_LINE_HEIGHT + 26
 
-    # Draw items
-    # Use a smaller font for the number inside the circle
+    # Draw items (skip any that would exceed bottom boundary)
     circle_num_font = load_font(bold=True, size=32)
     for i, lines in enumerate(wrapped_items):
+        if y + line_h_item > c_bottom:
+            break
         circle_y = y + (line_h_item - NUMBER_CIRCLE_SIZE) // 2
         draw_number_circle(draw, PADDING, circle_y, i + 1, circle_num_font)
 
         text_x = PADDING + NUMBER_CIRCLE_SIZE + 24
         for line in lines:
+            if y + line_h_item > c_bottom:
+                break
             draw.text((text_x, y), line, fill=WHITE, font=item_font)
             y += line_h_item
 
         y += item_gap
+
+    # Composite blog image into bottom half
+    img = composite_bottom_image(img, blog_image_path)
+    draw = ImageDraw.Draw(img)
 
     draw_slide_counter(draw, slide_num, total_slides)
 
@@ -559,9 +648,11 @@ def create_stat_slide(
     slide_num: int,
     total_slides: int,
     logo_path: str,
+    blog_image_path: str = None,
 ) -> Image.Image:
     """
     Create a stat slide with a large number/metric + context.
+    Two-half layout: text on top, blog image on bottom with gradient.
     """
     img = Image.new("RGBA", SLIDE_SIZE, (*BG_COLOR, 255))
     draw = ImageDraw.Draw(img)
@@ -574,7 +665,7 @@ def create_stat_slide(
     detail_font = load_font(bold=False, size=STAT_DETAIL_SIZE)
 
     max_text_width = SLIDE_WIDTH - (PADDING * 2)
-    c_top, c_bottom = content_area()
+    c_top, c_bottom = content_area_top_half()
 
     # Calculate text dimensions
     num_w = text_width(number, number_font)
@@ -597,7 +688,19 @@ def create_stat_slide(
         total_h += len(detail_lines) * line_h_detail
 
     available = c_bottom - c_top
-    y = c_top + (available - total_h) // 2
+
+    # Overflow protection: truncate detail lines if needed
+    while total_h > available and len(detail_lines) > 1:
+        detail_lines.pop()
+        total_h = num_h + 30
+        if label_lines:
+            total_h += len(label_lines) * line_h_label + 20
+        total_h += ACCENT_LINE_HEIGHT + 40
+        if detail_lines:
+            total_h += len(detail_lines) * line_h_detail
+
+    # Vertically center, clamped to never go above c_top
+    y = safe_start_y(c_top, c_bottom, total_h)
 
     # Draw large number (centered)
     num_x = (SLIDE_WIDTH - num_w) // 2
@@ -618,13 +721,19 @@ def create_stat_slide(
     draw_accent_line(draw, line_x, y)
     y += ACCENT_LINE_HEIGHT + 40
 
-    # Detail (centered)
+    # Detail (centered, skip lines that exceed bounds)
     if detail_lines:
         for line in detail_lines:
+            if y + line_h_detail > c_bottom:
+                break
             lw = text_width(line, detail_font)
             lx = (SLIDE_WIDTH - lw) // 2
             draw.text((lx, y), line, fill=ZINC_300, font=detail_font)
             y += line_h_detail
+
+    # Composite blog image into bottom half
+    img = composite_bottom_image(img, blog_image_path)
+    draw = ImageDraw.Draw(img)
 
     draw_slide_counter(draw, slide_num, total_slides)
 
@@ -637,9 +746,11 @@ def create_quote_slide(
     slide_num: int,
     total_slides: int,
     logo_path: str,
+    blog_image_path: str = None,
 ) -> Image.Image:
     """
     Create a quote slide with large decorative quote marks.
+    Two-half layout: text on top, blog image on bottom with gradient.
     """
     img = Image.new("RGBA", SLIDE_SIZE, (*BG_COLOR, 255))
     draw = ImageDraw.Draw(img)
@@ -652,7 +763,7 @@ def create_quote_slide(
     mark_font = load_font(bold=True, size=QUOTE_MARK_SIZE)
 
     max_text_width = SLIDE_WIDTH - (PADDING * 2) - 40  # Extra inset for quote
-    c_top, c_bottom = content_area()
+    c_top, c_bottom = content_area_top_half()
 
     line_h_quote = int(QUOTE_TEXT_SIZE * 1.6)
     line_h_attr = int(QUOTE_ATTR_SIZE * 1.4)
@@ -668,7 +779,17 @@ def create_quote_slide(
         total_h += line_h_attr
 
     available = c_bottom - c_top
-    y = c_top + (available - total_h) // 2
+
+    # Overflow protection: truncate quote lines if needed
+    while total_h > available and len(quote_lines) > 2:
+        quote_lines.pop()
+        quote_lines[-1] = quote_lines[-1].rstrip() + "..."
+        total_h = mark_h + 20 + len(quote_lines) * line_h_quote + 40
+        if attribution:
+            total_h += line_h_attr
+
+    # Vertically center, clamped to never go above c_top
+    y = safe_start_y(c_top, c_bottom, total_h)
 
     # Opening quote mark (large, muted)
     draw.text((PADDING, y), "\u201C", fill=ZINC_800, font=mark_font)
@@ -688,6 +809,10 @@ def create_quote_slide(
         y += ACCENT_LINE_HEIGHT + 20
         draw.text((quote_x, y), attribution, fill=ZINC_300, font=attr_font)
 
+    # Composite blog image into bottom half
+    img = composite_bottom_image(img, blog_image_path)
+    draw = ImageDraw.Draw(img)
+
     draw_slide_counter(draw, slide_num, total_slides)
 
     return img.convert("RGB")
@@ -699,9 +824,11 @@ def create_cta_slide(
     action: str,
     logo_path: str,
     total_slides: int,
+    blog_image_path: str = None,
 ) -> Image.Image:
     """
     Create a CTA (call-to-action) slide. Center-aligned, prominent branding.
+    Two-half layout: text on top, blog image on bottom with gradient.
     """
     img = Image.new("RGBA", SLIDE_SIZE, (*BG_COLOR, 255))
     draw = ImageDraw.Draw(img)
@@ -713,7 +840,7 @@ def create_cta_slide(
     action_font = load_font(bold=True, size=CTA_SUBTEXT_SIZE)
 
     max_text_width = SLIDE_WIDTH - (PADDING * 2)
-    c_top, c_bottom = content_area()
+    c_top, c_bottom = content_area_top_half()
 
     line_h_headline = int(CTA_HEADLINE_SIZE * 1.4)
     line_h_sub = int(CTA_SUBTEXT_SIZE * 1.4)
@@ -768,6 +895,10 @@ def create_cta_slide(
         aw = text_width(action, action_font)
         ax = (SLIDE_WIDTH - aw) // 2
         draw.text((ax, y), action, fill=ZINC_300, font=action_font)
+
+    # Composite blog image into bottom half
+    img = composite_bottom_image(img, blog_image_path)
+    draw = ImageDraw.Draw(img)
 
     # Counter
     draw_slide_counter(draw, total_slides, total_slides)
@@ -914,11 +1045,24 @@ def parse_carousel_markdown(path: str) -> dict:
 
 # --- Main Generator ---
 
+def load_blog_images(blog_images_dir: str) -> list[str]:
+    """Load blog image paths from a directory, sorted by filename."""
+    if not blog_images_dir or not os.path.isdir(blog_images_dir):
+        return []
+    exts = {".png", ".jpg", ".jpeg", ".webp"}
+    images = sorted(
+        f for f in os.listdir(blog_images_dir)
+        if os.path.splitext(f)[1].lower() in exts
+    )
+    return [os.path.join(blog_images_dir, f) for f in images]
+
+
 def generate_carousel(
     markdown_path: str,
     cover_image_path: str,
     output_dir: str,
     logo_path: str,
+    blog_images_dir: str = None,
 ):
     """Generate all carousel slides and caption file."""
     data = parse_carousel_markdown(markdown_path)
@@ -932,11 +1076,21 @@ def generate_carousel(
     print(f"Found {total_slides} slides in: {markdown_path}")
     print(f"Output size: {SLIDE_WIDTH}x{SLIDE_HEIGHT}px (4:5 portrait)")
 
+    # Load blog images for bottom-half compositing
+    blog_images = load_blog_images(blog_images_dir)
+    if blog_images:
+        print(f"Found {len(blog_images)} blog images in: {blog_images_dir}")
+    else:
+        print("No blog images directory specified; using solid dark backgrounds.")
+
     os.makedirs(output_dir, exist_ok=True)
 
     for i, slide in enumerate(slides):
         slide_num = i + 1
         slide_type = slide["type"]
+
+        # Pick blog image for this slide (cycle through available images)
+        blog_img_path = blog_images[i % len(blog_images)] if blog_images else None
 
         # First slide is always cover regardless of annotation
         if slide_num == 1:
@@ -962,6 +1116,7 @@ def generate_carousel(
                 slide_num=slide_num,
                 total_slides=total_slides,
                 logo_path=logo_path,
+                blog_image_path=blog_img_path,
             )
         elif slide_type == "stat":
             img = create_stat_slide(
@@ -971,6 +1126,7 @@ def generate_carousel(
                 slide_num=slide_num,
                 total_slides=total_slides,
                 logo_path=logo_path,
+                blog_image_path=blog_img_path,
             )
         elif slide_type == "quote":
             img = create_quote_slide(
@@ -979,6 +1135,7 @@ def generate_carousel(
                 slide_num=slide_num,
                 total_slides=total_slides,
                 logo_path=logo_path,
+                blog_image_path=blog_img_path,
             )
         elif slide_type == "cta":
             img = create_cta_slide(
@@ -987,6 +1144,7 @@ def generate_carousel(
                 action=slide.get("action", ""),
                 logo_path=logo_path,
                 total_slides=total_slides,
+                blog_image_path=blog_img_path,
             )
         else:
             # Default: content slide
@@ -997,6 +1155,7 @@ def generate_carousel(
                 total_slides=total_slides,
                 logo_path=logo_path,
                 show_swipe=(slide_num == 2),
+                blog_image_path=blog_img_path,
             )
 
         slide_path = os.path.join(output_dir, f"slide-{slide_num:02d}.png")
@@ -1043,6 +1202,11 @@ def main():
         default=str(DEFAULT_LOGO),
         help="Path to logo PNG (default: built-in Augmi logo)",
     )
+    parser.add_argument(
+        "--blog-images-dir",
+        default=None,
+        help="Directory of blog images for bottom-half compositing (enables two-half layout)",
+    )
 
     args = parser.parse_args()
 
@@ -1065,6 +1229,7 @@ def main():
         cover_image_path=args.cover_image,
         output_dir=args.output_dir,
         logo_path=args.logo,
+        blog_images_dir=args.blog_images_dir,
     )
 
 

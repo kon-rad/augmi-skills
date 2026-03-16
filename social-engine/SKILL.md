@@ -2,6 +2,13 @@
 
 Complete automated social media content orchestrator from trend discovery to daily analytics and continuous learning.
 
+## Configuration
+
+All paths, settings, and schedules live in `.claude/skills/social-content-engine/config.json`.
+Run `/social-content-engine init` to create or update this config.
+
+See `INITIALIZATION.md` for the full list of required fields and an example config.
+
 ## Overview
 
 The Social Engine is a full-stack content generation pipeline that discovers trending topics, researches them deeply, creates multi-format content (images, videos, carousels), humanizes text, schedules posts across platforms, and learns from daily analytics to improve future content.
@@ -117,18 +124,17 @@ content/strategy/posting-log.md (updated with post IDs)
 ### Phase 7: Daily Analytics (Automated at 7 AM UTC)
 **Trigger**: Cron job `/api/cron/social-analytics`
 - Collects engagement metrics from all platforms
-- Updates KPI tracking in `social-growth-strategy.md`
+- Updates KPI tracking in `data/social-analytics/viral-growth-strategy.md`
 - Generates 10 growth recommendations
 - Feeds back into viral-research for better targeting
 
 **Output**:
 ```
-OUTPUT/social-analytics/{date}/
+data/social-analytics/{date}/
 ├── metrics.json
-├── performance-report.pdf
 └── recommendations.md
 
-social-growth-strategy.md (updated with latest KPIs)
+data/social-analytics/viral-growth-strategy.md (updated with latest KPIs)
 ```
 
 ---
@@ -140,7 +146,7 @@ The strategy file is the centerpiece:
 ```
 Daily Analytics (7 AM)
     ↓
-Updates social-growth-strategy.md
+Updates data/social-analytics/viral-growth-strategy.md
     ↓
 viral-research reads strategy
     ↓
@@ -153,38 +159,43 @@ Next cycle is smarter
 
 ## File Structure
 
-When you run `/social-engine init`, it creates:
+All paths below are configured in `config.json` and can be customized. This shows the recommended defaults.
 
 ```
-hexly/
-├── social-engine-guide.md
-├── social-growth-strategy.md
+project-root/
+├── .claude/skills/social-content-engine/
+│   └── config.json                        ← single source of truth
 ├── content/
 │   ├── strategy/
-│   │   └── posting-log.md
-│   ├── style-guides/
-│   │   ├── carousel-guide.md
-│   │   ├── blog-guide.md
-│   │   ├── linkedin-guide.md
-│   │   ├── twitter-guide.md
-│   │   └── video-guide.md
-│   └── research/
-│       └── [topic-specific research files]
-├── OUTPUT/
-│   ├── {date}/
-│   │   └── {slug}/
-│   │       ├── research-summary.md
-│   │       ├── images/
-│   │       ├── carousel/
-│   │       └── videos/
+│   │   ├── content-thesis.md              ← viral principles & shareability rules
+│   │   ├── content-style-guide.md         ← hooks, tone, brand voice (unified)
+│   │   ├── content-grades.md              ← quality scoring history
+│   │   ├── posting-log.md                 ← post history with engagement data
+│   │   ├── posting-schedule.md            ← when to post per platform
+│   │   ├── follower-conversion-playbook.md
+│   │   └── business-thesis.md
+│   ├── research/
+│   │   └── [topic-specific research files]
+│   └── templates/
+│       └── [reusable content templates]
+├── data/
 │   └── social-analytics/
-│       └── {date}/
-│           ├── metrics.json
-│           ├── performance-report.pdf
-│           └── recommendations.md
-└── app/api/cron/
-    └── social-analytics/
-        └── route.ts
+│       ├── viral-growth-strategy.md       ← KPIs + recommendations (updated daily)
+│       ├── {date}/
+│       │   ├── metrics.json
+│       │   └── recommendations.md
+│       └── raw/
+├── docs/
+│   └── brand/                             ← mission, value prop, brand foundation
+└── OUTPUT/
+    ├── {date}/
+    │   └── {slug}/
+    │       ├── research-summary.md
+    │       ├── images/
+    │       ├── carousel/
+    │       └── videos/
+    └── self-improvement/
+        └── {date}/
 ```
 
 ---
@@ -205,26 +216,17 @@ hexly/
 
 ---
 
-## Configuration Files
+## Key Config-Driven Files
 
-**social-engine-guide.md** - Define your niche
-```markdown
-# Social Engine Guide
+All paths below are read from `config.json`. These are the recommended defaults.
 
-## Niche Definition
-- Primary: AI Agents, OpenClaw, Claude Code
-- Subtopics: [...]
+**`content/strategy/content-style-guide.md`** - Unified style guide
+- Hook templates per platform
+- Emotion targeting frameworks
+- Brand voice rules
+- Visual aesthetic guidelines (replaces the old per-format style-guides directory)
 
-## Target Platforms
-- Instagram, X, LinkedIn, YouTube
-
-## Content Quality Standards
-- Engagement targets
-- Posting frequency
-- Brand voice guidelines
-```
-
-**social-growth-strategy.md** - Track KPIs (updated daily)
+**`data/social-analytics/viral-growth-strategy.md`** - KPI tracking (updated daily by cron)
 ```markdown
 # Social Growth Strategy
 
@@ -242,26 +244,17 @@ hexly/
 [10 actionable recommendations]
 ```
 
-**content/strategy/posting-log.md** - Post history
+**`content/strategy/posting-log.md`** - Post history with engagement data
 ```markdown
 | Date | Platform | Content | Post ID | Engagement | Notes |
 |------|----------|---------|---------|------------|-------|
 | ... | Instagram | Carousel | id123 | 3.2% | [notes] |
 ```
 
----
-
-## Style Guides
-
-Each content type has a dedicated style guide:
-
-- **carousel-guide.md** - Instagram carousel 1080x1350px, 6-slide format
-- **blog-guide.md** - Blog/social featured images, visual hierarchy
-- **linkedin-guide.md** - Professional aesthetic, 1:1 aspect ratio
-- **twitter-guide.md** - Thread format, concise captions
-- **video-guide.md** - 9:16 vertical, 30-60 sec, captions
-
-All guides reference shared color palette, typography, and brand voice.
+**`content/strategy/content-thesis.md`** - Viral principles
+- What makes content shareable in your niche
+- Emotional triggers that work for your audience
+- Format-specific performance patterns
 
 ---
 
@@ -270,42 +263,18 @@ All guides reference shared color palette, typography, and brand voice.
 Run the initialization command:
 
 ```bash
-/social-engine init
+/social-content-engine init
 ```
 
-This interactive setup will:
+This collects your brand info, niche, file paths, API keys, platform IDs, and automation tier, then writes them all to `.claude/skills/social-content-engine/config.json`.
 
-1. **Define Your Niche**
-   - Enter primary niche keywords
-   - Define subtopics
-   - Set target platforms
+See `INITIALIZATION.md` for the complete step-by-step guide, including all required fields and an example config.
 
-2. **Configure Directories**
-   - Create output folders
-   - Set research location
-   - Configure analytics storage
+After init, verify your setup:
 
-3. **Create Style Guides**
-   - Generate carousel guide
-   - Generate blog guide
-   - Generate LinkedIn guide
-   - Generate Twitter guide
-   - Generate video guide
-
-4. **Set API Keys**
-   - POSTIZ_API_KEY
-   - GEMINI_API_KEY
-   - ANTHROPIC_API_KEY
-   - CRON_SECRET
-
-5. **Configure Cron**
-   - Choose cron service (external or Fly.io)
-   - Set time (default 7 AM UTC)
-   - Test connection
-
-6. **Summary**
-   - Review all configurations
-   - Ready to run `/social-engine`
+```bash
+/social-content-engine verify
+```
 
 ---
 
@@ -328,7 +297,7 @@ This interactive setup will:
 
 **View Strategy & KPIs**:
 ```bash
-cat social-growth-strategy.md
+cat data/social-analytics/viral-growth-strategy.md
 ```
 
 **View Posting History**:
@@ -338,8 +307,8 @@ cat content/strategy/posting-log.md
 
 **Check Latest Analytics**:
 ```bash
-ls -lt OUTPUT/social-analytics/ | head
-cat OUTPUT/social-analytics/{latest-date}/recommendations.md
+ls -lt data/social-analytics/ | head
+cat data/social-analytics/{latest-date}/recommendations.md
 ```
 
 ---
@@ -352,9 +321,8 @@ The cron job at 7:00 AM UTC automatically:
 2. Scrapes metrics from all platforms
 3. Analyzes engagement patterns
 4. Generates 10 growth recommendations
-5. Updates `social-growth-strategy.md`
-6. Saves JSON metrics to `OUTPUT/social-analytics/{date}/`
-7. Generates PDF performance report
+5. Updates `data/social-analytics/viral-growth-strategy.md`
+6. Saves JSON metrics to `data/social-analytics/{date}/`
 
 ---
 
@@ -375,11 +343,11 @@ Tracked daily and saved to strategy file:
 
 **No trends found**
 - Check internet connectivity
-- Verify niche keywords in `social-engine-guide.md`
+- Verify niche keywords in `.claude/skills/social-content-engine/config.json` (`niche.keywords`)
 - Check API rate limits
 
 **Low engagement**
-- Review recommendations in `social-growth-strategy.md`
+- Review recommendations in `data/social-analytics/viral-growth-strategy.md`
 - Check posting times and audience timezone
 - A/B test different content formats
 
@@ -397,16 +365,17 @@ Tracked daily and saved to strategy file:
 
 ## Next Steps
 
-1. Run `/social-engine init` to set up
+1. Run `/social-content-engine init` to create `config.json`
 2. Configure API keys in `.env.local`
-3. Set up daily cron job
-4. Run `/social-engine` to start first cycle
-5. Monitor `social-growth-strategy.md` daily
+3. Run `/social-content-engine verify` to confirm setup
+4. Set up daily cron job pointing at your analytics endpoint
+5. Run `/viral-research` to find first topics
+6. Run `/social-content-engine` to start first cycle
+7. Monitor `data/social-analytics/viral-growth-strategy.md` daily
 
 ---
 
-**Version**: 1.0
-**Location**: `/dev/startups/augmi-skills/social-engine/`
+**Version**: 2.0
+**Date**: 2026-03-15
+**Location**: `augmi-skills/social-engine/`
 **Maintained By**: @konradgnat
-
-Ready to automate your social media? Start with `/social-engine init` 🚀
